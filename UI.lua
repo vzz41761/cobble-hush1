@@ -1,4 +1,4 @@
--- cobble hills UI (HUSH ULTIMATE)
+-- cobble hills UI (HUSH V2)
 local UserInputService = game:GetService("UserInputService")
 local TweenService     = game:GetService("TweenService")
 local Config = getgenv().CobbleConfig
@@ -8,7 +8,7 @@ local Theme = {
     Bg = Color3.fromRGB(16, 18, 25), Sidebar = Color3.fromRGB(22, 24, 33),
     Surface = Color3.fromRGB(30, 33, 45), Text = Color3.fromRGB(240, 242, 250),
     Muted = Color3.fromRGB(120, 126, 145), Accent = Color3.fromRGB(90, 140, 255),
-    Off = Color3.fromRGB(40, 44, 58), Green = Color3.fromRGB(80, 220, 130)
+    Off = Color3.fromRGB(40, 44, 58)
 }
 
 local function Tween(inst, props, time)
@@ -29,8 +29,6 @@ Main.BackgroundColor3 = Theme.Bg
 Main.BorderSizePixel = 0
 Main.Parent = Gui
 Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 12)
-local stroke = Instance.new("UIStroke", Main)
-stroke.Color = Theme.Accent; stroke.Transparency = 0.8
 
 local TitleBar = Instance.new("Frame")
 TitleBar.Size = UDim2.new(1, 0, 0, 50)
@@ -145,6 +143,74 @@ local function CreateToggle(text, get, set)
     Refresh()
 end
 
+local function CreateSlider(text, min, max, get, set)
+    local holder = Instance.new("Frame")
+    holder.Size = UDim2.new(1, 0, 0, 48)
+    holder.BackgroundTransparency = 1
+    holder.Parent = Scroll
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -50, 0, 16)
+    label.BackgroundTransparency = 1
+    label.Font = Enum.Font.GothamMedium
+    label.Text = text
+    label.TextColor3 = Theme.Text
+    label.TextSize = 13
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = holder
+
+    local valText = Instance.new("TextLabel")
+    valText.Size = UDim2.fromOffset(50, 16)
+    valText.Position = UDim2.new(1, -50, 0, 0)
+    valText.BackgroundTransparency = 1
+    valText.Font = Enum.Font.Gotham
+    valText.TextColor3 = Theme.Accent
+    valText.TextSize = 12
+    valText.TextXAlignment = Enum.TextXAlignment.Right
+    valText.Parent = holder
+
+    local track = Instance.new("Frame")
+    track.Size = UDim2.new(1, 0, 0, 6)
+    track.Position = UDim2.new(0, 0, 0, 26)
+    track.BackgroundColor3 = Theme.Off
+    track.Parent = holder
+    Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
+
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new(0, 0, 1, 0)
+    fill.BackgroundColor3 = Theme.Accent
+    fill.Parent = track
+    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
+
+    local handle = Instance.new("Frame")
+    handle.Size = UDim2.fromOffset(14, 14)
+    handle.AnchorPoint = Vector2.new(0.5, 0.5)
+    handle.Position = UDim2.new(0, 0, 0.5, 0)
+    handle.BackgroundColor3 = Color3.new(1,1,1)
+    handle.Parent = track
+    Instance.new("UICorner", handle).CornerRadius = UDim.new(1, 0)
+
+    local function Refresh()
+        local v = tonumber(get()) or min
+        local a = math.clamp((v - min) / (max - min), 0, 1)
+        fill.Size = UDim2.new(a, 0, 1, 0)
+        handle.Position = UDim2.new(a, 0, 0.5, 0)
+        valText.Text = tostring(math.floor(v))
+    end
+
+    local dragging = false
+    local function SetFromX(x)
+        local a = math.clamp((x - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+        set(math.floor(min + (max - min) * a))
+        Refresh()
+    end
+
+    track.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true; SetFromX(i.Position.X) end end)
+    UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
+    UserInputService.InputChanged:Connect(function(i) if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then SetFromX(i.Position.X) end end)
+    Refresh()
+end
+
 local function CreateButton(text, color, callback)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, 0, 0, 36)
@@ -173,9 +239,9 @@ local function LoadTab(tabName)
         CreateToggle("Jogadores ESP", function() return Config.ESP.Enabled end, function(v) Config.ESP.Enabled = v end)
         CreateToggle("Chams (Player)", function() return Config.ESP.Chams end, function(v) Config.ESP.Chams = v end)
         CreateToggle("Loot ESP (Itens)", function() return Config.Loot.Enabled end, function(v) Config.Loot.Enabled = v end)
+        CreateSlider("Loot Max Dist", 50, 500, function() return Config.Loot.MaxDist end, function(v) Config.Loot.MaxDist = v end)
     elseif tabName == "Utils" then
         CreateToggle("Silent Walk (Zero Som)", function() return Config.Util.SilentWalk end, function(v) Config.Util.SilentWalk = v end)
-        CreateToggle("Fast Vault (Voa Rasante)", function() return Config.Util.FastVault end, function(v) Config.Util.FastVault = v end)
         CreateToggle("Fullbright (Luz Total)", function() return Config.Util.Fullbright end, function(v) Config.Util.Fullbright = v end)
         
         CreateButton("UNLOAD SCRIPT", Color3.fromRGB(255, 80, 80), function()
