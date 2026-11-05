@@ -1,298 +1,170 @@
--- cobble hills logic (DEEP LOOT SCAN)
+-- cobble hills logic (HUSH ULTIMATE)
 pcall(function() if setthreadidentity then setthreadidentity(8) end end)
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
+local Workspace        = game:GetService("Workspace")
+local ReplicatedStorage= game:GetService("ReplicatedStorage")
+local Lighting         = game:GetService("Lighting")
 
 local LocalPlayer = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
-local Mouse = LocalPlayer:GetMouse()
+local Camera      = Workspace.CurrentCamera
 
 getgenv().CobbleConfig = {
-    ESP = { 
-        Enabled = true, 
-        Players = false, 
-        Monsters = true, 
-        Loot = true, 
-        MaxDist = 300,
-        LootFilters = {
-            Chests = true, 
-            Keys = true, 
-            Meds = true, 
-            Weapons = true, 
-            Money = true 
-        }
-    },
-    Aimbot = { Enabled = true, Silent = true, HoldMode = true, Key = Enum.UserInputType.MouseButton2, FOV = 150, Smoothness = 0.25, Target = "Listener", WallCheck = true },
-    Util = { Speed = 16, SilentWalk = true, AutoPickup = true, HitboxExpand = false, HitboxSize = 8 }
+    ESP = { Enabled = true, Box = true, Chams = true, Name = true, Dist = true },
+    Loot = { Enabled = true, MaxDist = 1000 },
+    Util = { SilentWalk = true, FastVault = false, Fullbright = false }
 }
-
 local Config = getgenv().CobbleConfig
-local CachedEntities = {}
-local espObjects = {}
-local fovCircle = Drawing.new("Circle")
 
-fovCircle.Thickness = 1.5
-fovCircle.NumSides = 60
-fovCircle.Color = Color3.fromRGB(90, 140, 255)
+local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+local MoveRemote = Remotes and Remotes:FindFirstChild("Move")
 
--- FUNÇÃO PRA ACHAR ITEM DENTRO DO BAÚ
-local function GetContents(itemModel)
-    local contents = ""
-    for _, child in ipairs(itemModel:GetDescendants()) do
-        if child:IsA("Tool") or child:IsA("Model") then
-            local name = child.Name:lower()
-            if name:find("gun") or name:find("pistol") or name:find("knife") or name:find("key") or name:find("ammo") then
-                contents = contents .. " [" .. child.Name .. "]"
-            end
+-- ==========================================
+-- SILENT WALK (Muta os sons locais do pé)
+-- ==========================================
+task.spawn(function()
+    while task.wait(0.1) do
+        if not Config.Util.SilentWalk then continue end
+        local char = LocalPlayer.Character
+        if char then
+            local lfoot = char:FindFirstChild("LeftFoot")
+            local rfoot = char:FindFirstChild("RightFoot")
+            if lfoot and lfoot:FindFirstChild("Footstep") then lfoot.Footstep.Volume = 0; lfoot.Footstep.Playing = false end
+            if rfoot and rfoot:FindFirstChild("Footstep") then rfoot.Footstep.Volume = 0; rfoot.Footstep.Playing = false end
         end
     end
-    return contents
-end
+end)
 
--- CACHE ULTRA OTIMIZADO (Com Deep Scan)
+-- ==========================================
+-- FAST VAULT (Spamma o remote de Vault)
+-- ==========================================
+task.spawn(function()
+    while task.wait(0.5) do
+        if not Config.Util.FastVault or not MoveRemote then continue end
+        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            -- Tenta spammar o vault pra frente pra "voar" rasante
+            pcall(function()
+                MoveRemote:FireServer("vault", Camera.CFrame.LookVector * 50, {})
+            end)
+        end
+    end
+end)
+
+-- ==========================================
+-- CACHE DE JOGADORES E LOOPS
+-- ==========================================
+local CachedPlayers = {}
 task.spawn(function()
     while task.wait(0.5) do
         local temp = {}
-        local camPos = Camera.CFrame.Position
-        
-        -- Players
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr ~= LocalPlayer and plr.Character then
                 local hum = plr.Character:FindFirstChildOfClass("Humanoid")
                 local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-                if hum and hrp and hum.Health > 0 and (camPos - hrp.Position).Magnitude < Config.ESP.MaxDist then 
-                    temp[plr.Character] = { Type = "Player", Name = plr.Name, Root = hrp } 
+                if hum and hrp and hum.Health > 0 then
+                    temp[plr.Character] = { Player = plr, Hum = hum, Root = hrp }
                 end
             end
         end
-
-        -- Monstros e Loot
-        for _, v in ipairs(Workspace:GetDescendants()) do
-            if v:IsA("Model") then
-                local hum = v:FindFirstChildOfClass("Humanoid")
-                local hrp = v:FindFirstChild("HumanoidRootPart")
-                
-                -- Monstros
-                if hum and hrp and hum.Health > 0 and (v.Name == "Listener" or v.Name == "Hound") then
-                    if (camPos - hrp.Position).Magnitude < Config.ESP.MaxDist then
-                        temp[v] = { Type = v.Name, Name = v.Name, Root = hrp }
-                    end
-                end
-            end
-
-            -- LOOT (Tools e ProximityPrompts)
-            local root = nil
-            local itemName = ""
-            
-            if v:IsA("Tool") and v:FindFirstChild("Handle") then
-                root = v.Handle
-                itemName = v.Name
-            elseif v:IsA("ProximityPrompt") and v.Parent and v.Parent:IsA("BasePart") then
-                root = v.Parent
-                itemName = v.Parent.Parent and v.Parent.Parent.Name or v.Parent.Name
-            end
-
-            if root and (camPos - root.Position).Magnitude < Config.ESP.MaxDist then
-                local name = itemName:lower()
-                local show = false
-                local extraText = ""
-                
-                -- Filtros
-                if Config.ESP.LootFilters.Chests and (name:find("crate") or name:find("chest") or name:find("safe") or name:find("container")) then 
-                    show = true 
-                    -- Tenta ver o que tem dentro do baú
-                    if root.Parent then
-                        extraText = GetContents(root.Parent)
-                    end
-                end
-                if Config.ESP.LootFilters.Keys and (name:find("key") or name:find("card")) then show = true end
-                if Config.ESP.LootFilters.Meds and (name:find("med") or name:find("pill") or name:find("band") or name:find("anti")) then show = true end
-                if Config.ESP.LootFilters.Weapons and (name:find("gun") or name:find("pistol") or name:find("knife") or name:find("ammo") or name:find("bat")) then show = true end
-                if Config.ESP.LootFilters.Money and (name:find("coin") or name:find("cash") or name:find("scrap") or name:find("jewel")) then show = true end
-                
-                if show then
-                    temp[root] = { Type = "Loot", Name = itemName .. extraText, Root = root }
-                end
-            end
-        end
-        CachedEntities = temp
+        CachedPlayers = temp
     end
 end)
 
--- AUTO PICKUP
-task.spawn(function()
-    while task.wait(0.1) do
-        if Config.Util.AutoPickup and LocalPlayer.Character then
-            local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                for _, info in pairs(CachedEntities) do
-                    if info.Type == "Loot" then
-                        local dist = (hrp.Position - info.Root.Position).Magnitude
-                        if dist < 15 then
-                            pcall(function()
-                                if firetouchinterest then
-                                    firetouchinterest(hrp, info.Root, 0)
-                                    task.wait(0.05)
-                                    firetouchinterest(hrp, info.Root, 1)
-                                end
-                            end)
-                        end
-                    end
-                end
-            end
-        end
-    end
-end)
+local espObjects, chamsObjects = {}, {}
 
--- HITBOX EXPANDER
-task.spawn(function()
-    while task.wait(2) do
-        if Config.Util.HitboxExpand then
-            for char, info in pairs(CachedEntities) do
-                if (info.Type == "Listener" or info.Type == "Hound") and char:FindFirstChild("HumanoidRootPart") then
-                    if char.HumanoidRootPart.Size.X ~= Config.Util.HitboxSize then
-                        char.HumanoidRootPart.Size = Vector3.new(Config.Util.HitboxSize, Config.Util.HitboxSize, Config.Util.HitboxSize)
-                        char.HumanoidRootPart.Transparency = 0.7
-                        char.HumanoidRootPart.CanCollide = false
-                    end
-                end
-            end
-        end
-    end
-end)
-
--- ESP
 local function UpdateESP()
-    local camPos = Camera.CFrame.Position
-    local activeObjects = {}
-
-    if Config.ESP.Enabled then
-        for char, info in pairs(CachedEntities) do
-            local show, color = false, Color3.fromRGB(60, 150, 255)
-            
-            if info.Type == "Player" and Config.ESP.Players then show = true; color = Color3.fromRGB(60, 150, 255) end
-            if info.Type == "Listener" and Config.ESP.Monsters then show = true; color = Color3.fromRGB(255, 60, 60) end
-            if info.Type == "Hound" and Config.ESP.Monsters then show = true; color = Color3.fromRGB(200, 60, 255) end
-            if info.Type == "Loot" and Config.ESP.Loot then show = true; color = Color3.fromRGB(255, 215, 0) end
-
-            if show and info.Root then
-                local dist = (camPos - info.Root.Position).Magnitude
-                if dist < Config.ESP.MaxDist then
-                    local sp = Camera:WorldToViewportPoint(info.Root.Position)
-                    if sp.Z > 0 then
-                        activeObjects[char] = true
-                        if not espObjects[char] then
-                            espObjects[char] = { name = Drawing.new("Text") }
-                            espObjects[char].name.Size = 13
-                            espObjects[char].name.Center = true
-                            espObjects[char].name.Outline = true
-                        end
-                        local obj = espObjects[char]
-                        obj.name.Visible = true
-                        obj.name.Color = color
-                        obj.name.Text = info.Name .. " [" .. math.floor(dist) .. "m]"
-                        obj.name.Position = Vector2.new(sp.X, sp.Y)
-                    end
-                end
+    if not Config.ESP.Enabled then
+        for _, obj in pairs(espObjects) do for _, d in pairs(obj) do d.Visible = false end end
+        return
+    end
+    local active = {}
+    for char, data in pairs(CachedPlayers) do
+        active[char] = true
+        if not espObjects[char] then
+            espObjects[char] = { name = Drawing.new("Text"), dist = Drawing.new("Text") }
+            espObjects[char].name.Size = 13; espObjects[char].name.Center = true; espObjects[char].name.Outline = true
+            espObjects[char].dist.Size = 12; espObjects[char].dist.Center = true; espObjects[char].dist.Outline = true
+        end
+        
+        if Config.ESP.Chams then
+            if not chamsObjects[char] then
+                local h = Instance.new("Highlight")
+                h.Name = "CobbleChams"; h.FillColor = Color3.fromRGB(255, 50, 50); h.OutlineColor = Color3.new(1,1,1)
+                h.FillTransparency = 0.5; h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop; h.Parent = char
+                chamsObjects[char] = h
             end
         end
-    end
 
-    for char, obj in pairs(espObjects) do
-        if not activeObjects[char] then
-            if obj.name then obj.name:Remove() end
-            espObjects[char] = nil
+        local obj = espObjects[char]
+        local head = char:FindFirstChild("Head") or data.Root
+        local sp = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 1, 0))
+        
+        if sp.Z > 0 then
+            obj.name.Visible = Config.ESP.Name; obj.name.Text = data.Player.Name; obj.name.Color = Color3.fromRGB(255, 255, 255); obj.name.Position = Vector2.new(sp.X, sp.Y - 20)
+            obj.dist.Visible = Config.ESP.Dist; obj.dist.Text = math.floor((Camera.CFrame.Position - data.Root.Position).Magnitude) .. "m"; obj.dist.Position = Vector2.new(sp.X, sp.Y + 10)
+        else
+            obj.name.Visible = false; obj.dist.Visible = false
         end
     end
 end
 
--- AIMBOT
-local function GetTarget(silent)
-    local mouse = UserInputService:GetMouseLocation()
-    local center = Camera.ViewportSize / 2
-    local targetPos = silent and center or mouse
+-- ==========================================
+-- LOOT ESP (Usando ProximityPrompts Genéricos)
+-- ==========================================
+local lootObjects = {}
+local function UpdateLoot()
+    if not Config.Loot.Enabled then
+        for _, v in pairs(lootObjects) do v:Remove() end
+        lootObjects = {}
+        return
+    end
     
-    local camPos = Camera.CFrame.Position
-    local best, bestDist = nil, Config.Aimbot.FOV
-
-    for char, info in pairs(CachedEntities) do
-        if info.Type ~= "Loot" and (Config.Aimbot.Target == "All" or info.Type == Config.Aimbot.Target) then
-            local part = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
-            if part then
-                if Config.Aimbot.WallCheck then
-                    local params = RaycastParams.new()
-                    params.FilterType = Enum.RaycastFilterType.Exclude
-                    params.FilterDescendantsInstances = { LocalPlayer.Character, char }
-                    if Workspace:Raycast(camPos, part.Position - camPos, params) then continue end
+    local activeLoot = {}
+    for _, v in ipairs(Workspace:GetDescendants()) do
+        if v:IsA("ProximityPrompt") and v.Parent and v.Parent:IsA("BasePart") then
+            local part = v.Parent
+            local dist = (Camera.CFrame.Position - part.Position).Magnitude
+            if dist < Config.Loot.MaxDist then
+                activeLoot[part] = true
+                if not lootObjects[part] then
+                    local txt = Drawing.new("Text")
+                    txt.Size = 12; txt.Center = true; txt.Outline = true; txt.Color = Color3.fromRGB(255, 215, 0)
+                    lootObjects[part] = txt
                 end
+                
                 local sp = Camera:WorldToViewportPoint(part.Position)
                 if sp.Z > 0 then
-                    local d = (Vector2.new(sp.X, sp.Y) - targetPos).Magnitude
-                    if d < bestDist then best, bestDist = part, d end
+                    lootObjects[part].Visible = true
+                    lootObjects[part].Text = "[" .. v.Parent.Parent.Name .. "]"
+                    lootObjects[part].Position = Vector2.new(sp.X, sp.Y)
+                else
+                    lootObjects[part].Visible = false
                 end
             end
         end
     end
-    return best
+    
+    for part, txt in pairs(lootObjects) do
+        if not activeLoot[part] then txt:Remove(); lootObjects[part] = nil end
+    end
 end
 
-local oldIndex
-local mt = getrawmetatable(game)
-setreadonly(mt, false)
-oldIndex = mt.__index
-mt.__index = newcclosure(function(self, key)
-    if Config.Aimbot.Enabled and Config.Aimbot.Silent then
-        local isKeyDown = Config.Aimbot.Key.EnumType == Enum.KeyCode and UserInputService:IsKeyDown(Config.Aimbot.Key) or UserInputService:IsMouseButtonPressed(Config.Aimbot.Key)
-        if isKeyDown and self == Mouse then
-            if key == "Hit" or key == "Target" then
-                local target = GetTarget(true)
-                if target then return target end
-            end
-        end
-    end
-    return oldIndex(self, key)
-end)
-setreadonly(mt, true)
-
-RunService:BindToRenderStep("CobbleHushAimbot", Enum.RenderPriority.Camera.Value + 1, function()
-    if not Config.Aimbot.Enabled or Config.Aimbot.Silent then return end
-    local isKeyDown = Config.Aimbot.Key.EnumType == Enum.KeyCode and UserInputService:IsKeyDown(Config.Aimbot.Key) or UserInputService:IsMouseButtonPressed(Config.Aimbot.Key)
-    if isKeyDown then
-        local target = GetTarget(false)
-        if target then
-            Camera.CFrame = Camera.CFrame:Lerp(CFrame.lookAt(Camera.CFrame.Position, target.Position), Config.Aimbot.Smoothness)
-        end
-    end
-end)
-
+-- ==========================================
+-- LOOPS
+-- ==========================================
 RunService.RenderStepped:Connect(function()
     UpdateESP()
-    fovCircle.Visible = Config.Aimbot.Enabled and not Config.Aimbot.Silent
-    if fovCircle.Visible then
-        fovCircle.Position = UserInputService:GetMouseLocation()
-        fovCircle.Radius = Config.Aimbot.FOV
-    end
-end)
-
-RunService.Stepped:Connect(function()
-    local char = LocalPlayer.Character
-    if char then
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then hum.WalkSpeed = Config.Util.Speed end
-        if Config.Util.SilentWalk then for _, v in ipairs(char:GetDescendants()) do if v:IsA("Sound") then v.Volume = 0; v.Playing = false end end end
+    UpdateLoot()
+    if Config.Util.Fullbright then
+        Lighting.Ambient = Color3.new(1,1,1); Lighting.Brightness = 2
     end
 end)
 
 getgenv().Cobble_Unload = function()
-    pcall(function() RunService:UnbindFromRenderStep("CobbleHushAimbot") end)
-    for _, obj in pairs(espObjects) do if obj.name then pcall(function() obj.name:Remove() end) end end
-    pcall(function() fovCircle:Remove() end)
-    pcall(function()
-        setreadonly(mt, false)
-        mt.__index = oldIndex
-        setreadonly(mt, true)
-    end)
+    for _, obj in pairs(espObjects) do for _, d in pairs(obj) do pcall(function() d:Remove() end) end end
+    for _, h in pairs(chamsObjects) do pcall(function() h:Destroy() end) end
+    for _, txt in pairs(lootObjects) do pcall(function() txt:Remove() end) end
 end
