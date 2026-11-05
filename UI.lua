@@ -1,4 +1,4 @@
--- cobble hills UI (PRO EDITION)
+-- cobble hills UI (REAL HUSH OPTIMIZED)
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local Config = getgenv().CobbleConfig
@@ -205,10 +205,24 @@ local function LoadTab(tabName)
         MakeToggle("ESP Enabled", function() return Config.ESP.Enabled end, function(v) Config.ESP.Enabled = v end)
         MakeToggle("Jogadores", function() return Config.ESP.Players end, function(v) Config.ESP.Players = v end)
         MakeToggle("Monstros", function() return Config.ESP.Monsters end, function(v) Config.ESP.Monsters = v end)
-        MakeToggle("Loot / Caixas", function() return Config.ESP.Loot end, function(v) Config.ESP.Loot = v end)
+        MakeToggle("Loot ESP", function() return Config.ESP.Loot end, function(v) Config.ESP.Loot = v end)
+        
+        -- OS FILTROS REAIS DO HUSH
+        MakeToggle("Chaves (Keys)", 
+            function() return Config.ESP.LootFilters.Keys end, 
+            function(v) Config.ESP.LootFilters.Keys = v end)
+        MakeToggle("Remédios (Meds)", 
+            function() return Config.ESP.LootFilters.Meds end, 
+            function(v) Config.ESP.LootFilters.Meds = v end)
+        MakeToggle("Armas Básicas", 
+            function() return Config.ESP.LootFilters.Weapons end, 
+            function(v) Config.ESP.LootFilters.Weapons = v end)
+        MakeToggle("Dinheiro / Lixo", 
+            function() return Config.ESP.LootFilters.Money end, 
+            function(v) Config.ESP.LootFilters.Money = v end)
     elseif tabName == "Combat" then
         MakeToggle("Aimbot Enabled", function() return Config.Aimbot.Enabled end, function(v) Config.Aimbot.Enabled = v end)
-        MakeToggle("Silent Aim (Magic Bullet)", function() return Config.Aimbot.Silent end, function(v) Config.Aimbot.Silent = v end)
+        MakeToggle("Silent Aim (Magic)", function() return Config.Aimbot.Silent end, function(v) Config.Aimbot.Silent = v end)
         MakeToggle("Wall Check", function() return Config.Aimbot.WallCheck end, function(v) Config.Aimbot.WallCheck = v end)
         
         local tBtn = Instance.new("TextButton")
@@ -224,7 +238,7 @@ local function LoadTab(tabName)
             tBtn.Text = "Alvo: " .. Config.Aimbot.Target
         end)
     elseif tabName == "Utils" then
-        MakeToggle("Auto Pickup (Pega itens)", function() return Config.Util.AutoPickup end, function(v) Config.Util.AutoPickup = v end)
+        MakeToggle("Auto Pickup", function() return Config.Util.AutoPickup end, function(v) Config.Util.AutoPickup = v end)
         MakeToggle("Hitbox Expander", function() return Config.Util.HitboxExpand end, function(v) Config.Util.HitboxExpand = v end)
         MakeSlider("Hitbox Size", 2, 20, function() return Config.Util.HitboxSize end, function(v) Config.Util.HitboxSize = v end)
         MakeToggle("Silent Walk", function() return Config.Util.SilentWalk end, function(v) Config.Util.SilentWalk = v end)
