@@ -1,14 +1,21 @@
--- cobble hills UI (HUSH V2)
+-- cobble hills UI (HUSH V3)
 local UserInputService = game:GetService("UserInputService")
 local TweenService     = game:GetService("TweenService")
 local Config = getgenv().CobbleConfig
-if not Config then return end
+if not Config then warn("[cobble] Config ausente — carregue o Logic primeiro."); return end
+
+-- garante Aim presente mesmo se UI subir antes do merge
+Config.Aim = Config.Aim or {
+    Enabled = false, AlwaysOn = false, Key = Enum.KeyCode.E,
+    FOV = 120, Smooth = 0.55, FireRate = 1/45,
+    ShowFOV = true, InvertYaw = false, InvertPitch = false,
+}
 
 local Theme = {
     Bg = Color3.fromRGB(16, 18, 25), Sidebar = Color3.fromRGB(22, 24, 33),
     Surface = Color3.fromRGB(30, 33, 45), Text = Color3.fromRGB(240, 242, 250),
     Muted = Color3.fromRGB(120, 126, 145), Accent = Color3.fromRGB(90, 140, 255),
-    Off = Color3.fromRGB(40, 44, 58)
+    Off = Color3.fromRGB(40, 44, 58), Danger = Color3.fromRGB(255, 80, 80),
 }
 
 local function Tween(inst, props, time)
@@ -23,8 +30,8 @@ local ok, hui = pcall(function() return gethui and gethui() end)
 Gui.Parent = (ok and hui) or game:GetService("CoreGui")
 
 local Main = Instance.new("Frame")
-Main.Size = UDim2.fromOffset(500, 400)
-Main.Position = UDim2.new(0.5, -250, 0.5, -200)
+Main.Size = UDim2.fromOffset(500, 420)
+Main.Position = UDim2.new(0.5, -250, 0.5, -210)
 Main.BackgroundColor3 = Theme.Bg
 Main.BorderSizePixel = 0
 Main.Parent = Gui
@@ -40,7 +47,7 @@ TitleText.Size = UDim2.new(1, -30, 1, 0)
 TitleText.Position = UDim2.fromOffset(20, 0)
 TitleText.BackgroundTransparency = 1
 TitleText.Font = Enum.Font.GothamBold
-TitleText.Text = "COBBLE <font color='#5A8CFF'>HUSH</font>"
+TitleText.Text = "COBBLE <font color='#5A8CFF'>HUSH</font> <font color='#787E91'>v3</font>"
 TitleText.RichText = true
 TitleText.TextColor3 = Theme.Text
 TitleText.TextSize = 18
@@ -97,6 +104,19 @@ local function CreateTab(text)
     return btn
 end
 
+local function CreateSection(text)
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, 0, 0, 20)
+    lbl.BackgroundTransparency = 1
+    lbl.Font = Enum.Font.GothamBold
+    lbl.Text = text
+    lbl.TextColor3 = Theme.Muted
+    lbl.TextSize = 11
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Parent = Scroll
+    return lbl
+end
+
 local function CreateToggle(text, get, set)
     local row = Instance.new("Frame")
     row.Size = UDim2.new(1, 0, 0, 32)
@@ -143,7 +163,8 @@ local function CreateToggle(text, get, set)
     Refresh()
 end
 
-local function CreateSlider(text, min, max, get, set)
+local function CreateSlider(text, min, max, get, set, step)
+    step = step or 1
     local holder = Instance.new("Frame")
     holder.Size = UDim2.new(1, 0, 0, 48)
     holder.BackgroundTransparency = 1
@@ -195,19 +216,33 @@ local function CreateSlider(text, min, max, get, set)
         local a = math.clamp((v - min) / (max - min), 0, 1)
         fill.Size = UDim2.new(a, 0, 1, 0)
         handle.Position = UDim2.new(a, 0, 0.5, 0)
-        valText.Text = tostring(math.floor(v))
+        if step >= 1 then
+            valText.Text = tostring(math.floor(v))
+        else
+            valText.Text = string.format("%.2f", v)
+        end
     end
 
     local dragging = false
     local function SetFromX(x)
         local a = math.clamp((x - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
-        set(math.floor(min + (max - min) * a))
+        local raw = min + (max - min) * a
+        local quantized = math.floor(raw / step + 0.5) * step
+        set(math.clamp(quantized, min, max))
         Refresh()
     end
 
-    track.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true; SetFromX(i.Position.X) end end)
-    UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
-    UserInputService.InputChanged:Connect(function(i) if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then SetFromX(i.Position.X) end end)
+    track.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true; SetFromX(i.Position.X)
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+    end)
+    UserInputService.InputChanged:Connect(function(i)
+        if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then SetFromX(i.Position.X) end
+    end)
     Refresh()
 end
 
@@ -223,38 +258,121 @@ local function CreateButton(text, color, callback)
     btn.Parent = Scroll
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
     btn.MouseButton1Click:Connect(callback)
+    return btn
 end
 
-local Tabs = { Visuals = CreateTab("Visuals"), Utils = CreateTab("Utils") }
+-- keybind capture
+local function CreateKeybind(text, get, set)
+    local row = Instance.new("Frame")
+    row.Size = UDim2.new(1, 0, 0, 32)
+    row.BackgroundTransparency = 1
+    row.Parent = Scroll
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -110, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Font = Enum.Font.GothamMedium
+    label.Text = text
+    label.TextColor3 = Theme.Text
+    label.TextSize = 13
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = row
+    local keyBtn = Instance.new("TextButton")
+    keyBtn.Size = UDim2.fromOffset(100, 24)
+    keyBtn.AnchorPoint = Vector2.new(1, 0.5)
+    keyBtn.Position = UDim2.new(1, 0, 0.5, 0)
+    keyBtn.BackgroundColor3 = Theme.Surface
+    keyBtn.Font = Enum.Font.GothamBold
+    keyBtn.TextColor3 = Theme.Accent
+    keyBtn.TextSize = 12
+    keyBtn.Text = get().Name
+    keyBtn.AutoButtonColor = false
+    keyBtn.Parent = row
+    Instance.new("UICorner", keyBtn).CornerRadius = UDim.new(0, 6)
+
+    local capturing = false
+    keyBtn.MouseButton1Click:Connect(function()
+        capturing = true
+        keyBtn.Text = "pressione..."
+        keyBtn.TextColor3 = Theme.Muted
+    end)
+    UserInputService.InputBegan:Connect(function(input, gpe)
+        if not capturing then return end
+        if input.UserInputType == Enum.UserInputType.Keyboard then
+            set(input.KeyCode)
+            keyBtn.Text = input.KeyCode.Name
+            keyBtn.TextColor3 = Theme.Accent
+            capturing = false
+        end
+    end)
+end
+
+local Tabs = {
+    Visuals = CreateTab("Visuals"),
+    Aim     = CreateTab("Aim"),
+    Utils   = CreateTab("Utils"),
+}
+
+local function clearScroll()
+    for _, v in ipairs(Scroll:GetChildren()) do
+        if v:IsA("Frame") or v:IsA("TextButton") or v:IsA("TextLabel") then v:Destroy() end
+    end
+end
 
 local function LoadTab(tabName)
-    for _, v in ipairs(Scroll:GetChildren()) do
-        if v:IsA("Frame") or v:IsA("TextButton") then v:Destroy() end
-    end
+    clearScroll()
     for name, btn in pairs(Tabs) do
         btn.TextColor3 = (name == tabName) and Theme.Accent or Theme.Muted
     end
 
     if tabName == "Visuals" then
-        CreateToggle("Jogadores ESP", function() return Config.ESP.Enabled end, function(v) Config.ESP.Enabled = v end)
-        CreateToggle("Chams (Player)", function() return Config.ESP.Chams end, function(v) Config.ESP.Chams = v end)
-        CreateToggle("Loot ESP (Itens)", function() return Config.Loot.Enabled end, function(v) Config.Loot.Enabled = v end)
-        CreateSlider("Loot Max Dist", 50, 500, function() return Config.Loot.MaxDist end, function(v) Config.Loot.MaxDist = v end)
+        CreateSection("JOGADORES")
+        CreateToggle("ESP Habilitado", function() return Config.ESP.Enabled end, function(v) Config.ESP.Enabled = v end)
+        CreateToggle("Box + Health Bar", function() return Config.ESP.Box end, function(v) Config.ESP.Box = v end)
+        CreateToggle("Chams (Highlight)", function() return Config.ESP.Chams end, function(v) Config.ESP.Chams = v end)
+        CreateToggle("Nome", function() return Config.ESP.Name end, function(v) Config.ESP.Name = v end)
+        CreateToggle("Distância", function() return Config.ESP.Dist end, function(v) Config.ESP.Dist = v end)
+
+        CreateSection("LOOT")
+        CreateToggle("Loot ESP", function() return Config.Loot.Enabled end, function(v) Config.Loot.Enabled = v end)
+        CreateSlider("Alcance (m)", 50, 500, function() return Config.Loot.MaxDist end, function(v) Config.Loot.MaxDist = v end, 10)
+
+    elseif tabName == "Aim" then
+        CreateSection("SILENT AIM (LOOK REMOTE)")
+        CreateToggle("Habilitado", function() return Config.Aim.Enabled end, function(v) Config.Aim.Enabled = v end)
+        CreateToggle("Sempre Ativo", function() return Config.Aim.AlwaysOn end, function(v) Config.Aim.AlwaysOn = v end)
+        CreateKeybind("Tecla de mira", function() return Config.Aim.Key end, function(v) Config.Aim.Key = v end)
+        CreateToggle("Mostrar FOV", function() return Config.Aim.ShowFOV end, function(v) Config.Aim.ShowFOV = v end)
+
+        CreateSection("TUNING")
+        CreateSlider("FOV (px)", 20, 400, function() return Config.Aim.FOV end, function(v) Config.Aim.FOV = v end, 5)
+        CreateSlider("Suavidade", 0.05, 1.0, function() return Config.Aim.Smooth end, function(v) Config.Aim.Smooth = v end, 0.05)
+        CreateSlider("Taxa de envio (Hz)", 10, 60, function() return 1 / Config.Aim.FireRate end, function(v) Config.Aim.FireRate = 1 / v end, 1)
+
+        CreateSection("CALIBRAÇÃO")
+        CreateToggle("Inverter Yaw", function() return Config.Aim.InvertYaw end, function(v) Config.Aim.InvertYaw = v end)
+        CreateToggle("Inverter Pitch", function() return Config.Aim.InvertPitch end, function(v) Config.Aim.InvertPitch = v end)
+
     elseif tabName == "Utils" then
-        CreateToggle("Silent Walk (Zero Som)", function() return Config.Util.SilentWalk end, function(v) Config.Util.SilentWalk = v end)
-        CreateToggle("Fullbright (Luz Total)", function() return Config.Util.Fullbright end, function(v) Config.Util.Fullbright = v end)
-        
-        CreateButton("UNLOAD SCRIPT", Color3.fromRGB(255, 80, 80), function()
-            if getgenv().Cobble_Unload then getgenv().Cobble_Unload() end
+        CreateSection("MOVIMENTO")
+        CreateToggle("Silent Walk (passo mudo)", function() return Config.Util.SilentWalk end, function(v) Config.Util.SilentWalk = v end)
+
+        CreateSection("AMBIENTE")
+        CreateToggle("Fullbright", function() return Config.Util.Fullbright end, function(v) Config.Util.Fullbright = v end)
+
+        CreateSection("SESSÃO")
+        CreateButton("UNLOAD SCRIPT", Theme.Danger, function()
+            if getgenv().Cobble_Unload then pcall(getgenv().Cobble_Unload) end
             Gui:Destroy()
         end)
     end
 end
 
 Tabs.Visuals.MouseButton1Click:Connect(function() LoadTab("Visuals") end)
+Tabs.Aim.MouseButton1Click:Connect(function() LoadTab("Aim") end)
 Tabs.Utils.MouseButton1Click:Connect(function() LoadTab("Utils") end)
 LoadTab("Visuals")
 
+-- drag da janela
 local dragging, dragInput, dragStart, startPos
 TitleBar.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -271,6 +389,7 @@ UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
 end)
 
+-- toggle visibilidade
 UserInputService.InputBegan:Connect(function(input, gpe)
     if gpe then return end
     if input.KeyCode == Enum.KeyCode.RightShift then Gui.Enabled = not Gui.Enabled end
