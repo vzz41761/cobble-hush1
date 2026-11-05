@@ -1,4 +1,4 @@
--- cobble hills UI (PRO FLY EDITION)
+-- cobble hills UI (PRO EDITION)
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local Config = getgenv().CobbleConfig
@@ -136,6 +136,65 @@ local function MakeButton(text, color, callback)
     btn.MouseButton1Click:Connect(callback)
 end
 
+local function MakeSlider(text, min, max, get, set)
+    local holder = Instance.new("Frame")
+    holder.Size = UDim2.new(1, 0, 0, 45)
+    holder.BackgroundTransparency = 1
+    holder.Parent = Scroll
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -50, 0, 15)
+    label.BackgroundTransparency = 1
+    label.Font = Enum.Font.Gotham
+    label.Text = text
+    label.TextColor3 = Theme.text
+    label.TextSize = 13
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = holder
+
+    local valText = Instance.new("TextLabel")
+    valText.Size = UDim2.new(50, 0, 0, 15)
+    valText.Position = UDim2.new(1, -50, 0, 0)
+    valText.BackgroundTransparency = 1
+    valText.Font = Enum.Font.Gotham
+    valText.TextColor3 = Theme.muted
+    valText.TextSize = 12
+    valText.TextXAlignment = Enum.TextXAlignment.Right
+    valText.Parent = holder
+
+    local track = Instance.new("Frame")
+    track.Size = UDim2.new(1, 0, 0, 6)
+    track.Position = UDim2.new(0, 0, 0, 25)
+    track.BackgroundColor3 = Theme.off
+    track.Parent = holder
+    Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
+
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new(0, 0, 1, 0)
+    fill.BackgroundColor3 = Theme.accent
+    fill.Parent = track
+    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
+
+    local function refresh()
+        local v = get()
+        local a = math.clamp((v - min) / (max - min), 0, 1)
+        fill.Size = UDim2.new(a, 0, 1, 0)
+        valText.Text = tostring(math.floor(v))
+    end
+
+    local dragging = false
+    local function setFromX(x)
+        local a = math.clamp((x - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+        set(math.floor(min + (max - min) * a))
+        refresh()
+    end
+
+    track.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true; setFromX(i.Position.X) end end)
+    UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
+    UserInputService.InputChanged:Connect(function(i) if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then setFromX(i.Position.X) end end)
+    refresh()
+end
+
 local Tabs = { Visuals = MakeTab("Visuals"), Combat = MakeTab("Combat"), Utils = MakeTab("Utils") }
 
 local function LoadTab(tabName)
@@ -146,9 +205,12 @@ local function LoadTab(tabName)
         MakeToggle("ESP Enabled", function() return Config.ESP.Enabled end, function(v) Config.ESP.Enabled = v end)
         MakeToggle("Jogadores", function() return Config.ESP.Players end, function(v) Config.ESP.Players = v end)
         MakeToggle("Monstros", function() return Config.ESP.Monsters end, function(v) Config.ESP.Monsters = v end)
+        MakeToggle("Loot / Caixas", function() return Config.ESP.Loot end, function(v) Config.ESP.Loot = v end)
     elseif tabName == "Combat" then
         MakeToggle("Aimbot Enabled", function() return Config.Aimbot.Enabled end, function(v) Config.Aimbot.Enabled = v end)
+        MakeToggle("Silent Aim (Magic Bullet)", function() return Config.Aimbot.Silent end, function(v) Config.Aimbot.Silent = v end)
         MakeToggle("Wall Check", function() return Config.Aimbot.WallCheck end, function(v) Config.Aimbot.WallCheck = v end)
+        
         local tBtn = Instance.new("TextButton")
         tBtn.Size = UDim2.new(1, 0, 0, 35)
         tBtn.BackgroundColor3 = Theme.surface
@@ -162,10 +224,11 @@ local function LoadTab(tabName)
             tBtn.Text = "Alvo: " .. Config.Aimbot.Target
         end)
     elseif tabName == "Utils" then
-        -- NOVO: FLY HACK
-        MakeToggle("Fly Hack (WASD + Space)", function() return Config.Fly.Enabled end, function(v) Config.Fly.Enabled = v end)
+        MakeToggle("Auto Pickup (Pega itens)", function() return Config.Util.AutoPickup end, function(v) Config.Util.AutoPickup = v end)
+        MakeToggle("Hitbox Expander", function() return Config.Util.HitboxExpand end, function(v) Config.Util.HitboxExpand = v end)
+        MakeSlider("Hitbox Size", 2, 20, function() return Config.Util.HitboxSize end, function(v) Config.Util.HitboxSize = v end)
         MakeToggle("Silent Walk", function() return Config.Util.SilentWalk end, function(v) Config.Util.SilentWalk = v end)
-        MakeToggle("Force Crouch", function() return Config.Util.ForceCrouch end, function(v) Config.Util.ForceCrouch = v end)
+        
         MakeButton("UNLOAD SCRIPT", Color3.fromRGB(255, 80, 80), function()
             if getgenv().Cobble_Unload then getgenv().Cobble_Unload() end
             Gui:Destroy()
