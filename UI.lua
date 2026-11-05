@@ -136,7 +136,7 @@ local function MakeButton(text, color, callback)
     btn.MouseButton1Click:Connect(callback)
 end
 
-local Tabs = { Visuals = MakeTab("Visuals"), Combat = MakeTab("Combat"), Utils = MakeTab("Utils") }
+local Tabs = { Visuals = MakeTab("Visuals"), Combat = MakeTab("Combat"), Utils = MakeTab("Utils"), Teleport = MakeTab("Teleport") }
 
 local function LoadTab(tabName)
     for _, v in ipairs(Scroll:GetChildren()) do if v:IsA("Frame") or v:IsA("TextButton") then v:Destroy() end end
@@ -169,12 +169,32 @@ local function LoadTab(tabName)
             if getgenv().Cobble_Unload then getgenv().Cobble_Unload() end
             Gui:Destroy()
         end)
+    elseif tabName == "Teleport" then
+        MakeButton("COPIAR MINHA POSIÇÃO (F9)", Color3.fromRGB(255, 165, 0), function()
+            local char = game.Players.LocalPlayer.Character
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                local pos = char.HumanoidRootPart.Position
+                local coordsText = string.format("Vector3.new(%d, %d, %d)", math.floor(pos.X), math.floor(pos.Y), math.floor(pos.Z))
+                if setclipboard then setclipboard(coordsText) end
+                print("=== COBBLE HILLS ===")
+                print("Copie e cole isso no Logic.lua do seu GitHub:")
+                print(coordsText)
+                print("====================")
+            end
+        end)
+
+        for name, _ in pairs(Config.Teleports) do
+            MakeButton("TP: " .. name, Theme.surface, function()
+                if getgenv().CobbleTP then getgenv().CobbleTP(name) end
+            end)
+        end
     end
 end
 
 Tabs.Visuals.MouseButton1Click:Connect(function() LoadTab("Visuals") end)
 Tabs.Combat.MouseButton1Click:Connect(function() LoadTab("Combat") end)
 Tabs.Utils.MouseButton1Click:Connect(function() LoadTab("Utils") end)
+Tabs.Teleport.MouseButton1Click:Connect(function() LoadTab("Teleport") end)
 LoadTab("Visuals")
 
 UserInputService.InputBegan:Connect(function(input, gpe)
