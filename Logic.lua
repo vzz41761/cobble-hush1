@@ -1,4 +1,4 @@
--- cobble hills logic
+-- cobble hills logic (PRO FLY EDITION)
 pcall(function() if setthreadidentity then setthreadidentity(8) end end)
 
 local Players = game:GetService("Players")
@@ -12,23 +12,24 @@ local Camera = Workspace.CurrentCamera
 getgenv().CobbleConfig = {
     ESP = { Enabled = true, Players = false, Monsters = true, Box = true, Name = true, Dist = true },
     Aimbot = { Enabled = true, HoldMode = true, Key = Enum.UserInputType.MouseButton2, FOV = 150, Smoothness = 0.25, Target = "Listener", WallCheck = true },
-    Util = { NoClip = false, Speed = 16, SilentWalk = true, ForceCrouch = false },
-    Teleports = {
-        ["Spawn"] = Vector3.new(0, 10, 0),
-        ["Casa Vermelha"] = Vector3.new(100, 10, 150),
-        ["Esconderijo"] = Vector3.new(-200, 5, 50)
-    }
+    Util = { Speed = 16, SilentWalk = true, ForceCrouch = false },
+    Fly = { Enabled = false, Speed = 80 } -- VELOCIDADE DO VOO (80 é rápido e seguro)
 }
 
 local Config = getgenv().CobbleConfig
 local CachedEntities = {}
 local espObjects = {}
 local fovCircle = Drawing.new("Circle")
+local flyBV = Instance.new("BodyVelocity")
 
 fovCircle.Thickness = 1.5
 fovCircle.NumSides = 60
 fovCircle.Color = Color3.fromRGB(90, 140, 255)
 
+flyBV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+flyBV.Velocity = Vector3.zero
+
+-- CACHE
 task.spawn(function()
     while task.wait(0.5) do
         local temp = {}
@@ -48,6 +49,7 @@ task.spawn(function()
     end
 end)
 
+-- ESP
 local function UpdateESP()
     if not Config.ESP.Enabled then
         for _, obj in pairs(espObjects) do for _, d in pairs(obj) do d.Visible = false end end
@@ -102,6 +104,7 @@ local function UpdateESP()
     end
 end
 
+-- AIMBOT
 local function GetTarget()
     local mouse = UserInputService:GetMouseLocation()
     local camPos = Camera.CFrame.Position
@@ -139,6 +142,7 @@ RunService:BindToRenderStep("CobbleHushAimbot", Enum.RenderPriority.Camera.Value
     end
 end)
 
+-- FLY & UTILS LOOP
 RunService.RenderStepped:Connect(function()
     UpdateESP()
     fovCircle.Visible = Config.Aimbot.Enabled
@@ -146,55 +150,44 @@ RunService.RenderStepped:Connect(function()
         fovCircle.Position = UserInputService:GetMouseLocation()
         fovCircle.Radius = Config.Aimbot.FOV
     end
-end)
 
-RunService.Stepped:Connect(function()
+    -- Lógica de Voo (Física via BodyVelocity)
     local char = LocalPlayer.Character
     if char then
+        local hrp = char:FindFirstChild("HumanoidRootPart")
         local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then hum.WalkSpeed = Config.Util.ForceCrouch and 6 or Config.Util.Speed end
-        if Config.Util.NoClip then for _, p in ipairs(char:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end
-        if Config.Util.SilentWalk then for _, v in ipairs(char:GetDescendants()) do if v:IsA("Sound") then v.Volume = 0; v.Playing = false end end end
+        
+        if hrp and hum then
+            if Config.Fly.Enabled then
+                flyBV.Parent = hrp
+                hum.PlatformStand = true
+                local move = Vector3.zero
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then move = move + Camera.CFrame.LookVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then move = move - Camera.CFrame.LookVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then move = move - Camera.CFrame.RightVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then move = move + Camera.CFrame.RightVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move = move + Vector3.new(0, 1, 0) end
+                if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then move = move - Vector3.new(0, 1, 0) end
+                flyBV.Velocity = move * Config.Fly.Speed
+            else
+                if flyBV.Parent then flyBV.Parent = nil end
+                hum.PlatformStand = false
+            end
+
+            hum.WalkSpeed = Config.Util.ForceCrouch and 6 or Config.Util.Speed
+            
+            if Config.Util.SilentWalk then 
+                for _, v in ipairs(char:GetDescendants()) do 
+                    if v:IsA("Sound") then v.Volume = 0; v.Playing = false end 
+                end 
+            end
+        end
     end
 end)
-
--- TELEPORTE STEALTH (VELOCIDADE + NOCLIP)
-getgenv().CobbleTP = function(name)
-    local char = LocalPlayer.Character
-    if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    
-    local pos = Config.Teleports[name]
-    if not pos then return end
-
-    -- Salva as configs antigas
-    local oldSpeed = Config.Util.Speed
-    local oldNoClip = Config.Util.NoClip
-
-    -- Ativa o modo "voo"
-    Config.Util.NoClip = true
-    Config.Util.Speed = 200 -- Velocidade alta, mas não instantânea
-    hum.WalkSpeed = 200
-
-    -- Move o boneco até o destino
-    hum:MoveTo(pos)
-
-    -- Espera o boneco chegar perto (ou 3 segundos)
-    local startTime = tick()
-    while (char.HumanoidRootPart.Position - pos).Magnitude > 10 and tick() - startTime < 3 do
-        task.wait()
-    end
-
-    -- Para o boneco e volta ao normal
-    hum:MoveTo(char.HumanoidRootPart.Position)
-    Config.Util.NoClip = oldNoClip
-    Config.Util.Speed = oldSpeed
-    hum.WalkSpeed = oldSpeed
-end
 
 getgenv().Cobble_Unload = function()
     pcall(function() RunService:UnbindFromRenderStep("CobbleHushAimbot") end)
     for _, obj in pairs(espObjects) do for _, d in pairs(obj) do pcall(function() d:Remove() end) end end
     pcall(function() fovCircle:Remove() end)
+    pcall(function() flyBV:Destroy() end)
 end
