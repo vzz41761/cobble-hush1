@@ -1,51 +1,89 @@
--- cobble hills logic (PRO FLY EDITION)
+-- cobble hills logic (PRO EDITION)
 pcall(function() if setthreadidentity then setthreadidentity(8) end end)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
+local ProximityPromptService = game:GetService("ProximityPromptService")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
+local Mouse = LocalPlayer:GetMouse()
 
 getgenv().CobbleConfig = {
-    ESP = { Enabled = true, Players = false, Monsters = true, Box = true, Name = true, Dist = true },
-    Aimbot = { Enabled = true, HoldMode = true, Key = Enum.UserInputType.MouseButton2, FOV = 150, Smoothness = 0.25, Target = "Listener", WallCheck = true },
-    Util = { Speed = 16, SilentWalk = true, ForceCrouch = false },
-    Fly = { Enabled = false, Speed = 80 } -- VELOCIDADE DO VOO (80 é rápido e seguro)
+    ESP = { Enabled = true, Players = false, Monsters = true, Loot = true, Box = true, Name = true, Dist = true },
+    Aimbot = { Enabled = true, Silent = true, HoldMode = true, Key = Enum.UserInputType.MouseButton2, FOV = 150, Smoothness = 0.25, Target = "Listener", WallCheck = true },
+    Util = { Speed = 16, SilentWalk = true, AutoPickup = true, HitboxExpand = false, HitboxSize = 8 }
 }
 
 local Config = getgenv().CobbleConfig
 local CachedEntities = {}
 local espObjects = {}
 local fovCircle = Drawing.new("Circle")
-local flyBV = Instance.new("BodyVelocity")
 
 fovCircle.Thickness = 1.5
 fovCircle.NumSides = 60
 fovCircle.Color = Color3.fromRGB(90, 140, 255)
 
-flyBV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-flyBV.Velocity = Vector3.zero
-
--- CACHE
+-- CACHE (Monstros, Players e Loot)
 task.spawn(function()
     while task.wait(0.5) do
         local temp = {}
+        -- Monstros e Players
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr ~= LocalPlayer and plr.Character then
                 local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-                if hum and hum.Health > 0 then temp[plr.Character] = { Type = "Player", Name = plr.Name } end
+                if hum and hum.Health > 0 then temp[plr.Character] = { Type = "Player", Name = plr.Name, Root = plr.Character:FindFirstChild("HumanoidRootPart") } end
             end
         end
         for _, v in ipairs(Workspace:GetDescendants()) do
             if v:IsA("Model") and (v.Name == "Listener" or v.Name == "Hound") then
                 local hum = v:FindFirstChildOfClass("Humanoid")
-                if hum and hum.Health > 0 then temp[v] = { Type = v.Name, Name = v.Name } end
+                if hum and hum.Health > 0 then temp[v] = { Type = v.Name, Name = v.Name, Root = v:FindFirstChild("HumanoidRootPart") } end
+            elseif v:IsA("Model") and (v.Name:lower():find("crate") or v.Name:lower():find("loot") or v.Name:lower():find("drop")) then
+                local root = v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("Handle") or v:FindFirstChildWhichIsA("BasePart")
+                if root then temp[v] = { Type = "Loot", Name = v.Name, Root = root } end
             end
         end
         CachedEntities = temp
+    end
+end)
+
+-- AUTO PICKUP
+task.spawn(function()
+    while task.wait(0.1) do
+        if Config.Util.AutoPickup and LocalPlayer.Character then
+            local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                for _, v in ipairs(Workspace:GetDescendants()) do
+                    if v:IsA("ProximityPrompt") then
+                        local part = v.Parent
+                        if part and part:IsA("BasePart") then
+                            local dist = (hrp.Position - part.Position).Magnitude
+                            if dist < 20 then
+                                pcall(function() fireproximityprompt(v) end)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- HITBOX EXPANDER
+task.spawn(function()
+    while task.wait(1) do
+        if Config.Util.HitboxExpand then
+            for char, info in pairs(CachedEntities) do
+                if (info.Type == "Listener" or info.Type == "Hound") and char:FindFirstChild("HumanoidRootPart") then
+                    char.HumanoidRootPart.Size = Vector3.new(Config.Util.HitboxSize, Config.Util.HitboxSize, Config.Util.HitboxSize)
+                    char.HumanoidRootPart.Transparency = 0.7
+                    char.HumanoidRootPart.CanCollide = false
+                end
+            end
+        end
     end
 end)
 
@@ -58,14 +96,11 @@ local function UpdateESP()
 
     for char, info in pairs(CachedEntities) do
         if not espObjects[char] then
-            espObjects[char] = { box = Drawing.new("Square"), name = Drawing.new("Text"), dist = Drawing.new("Text") }
+            espObjects[char] = { box = Drawing.new("Square"), name = Drawing.new("Text") }
             espObjects[char].box.Thickness = 1
             espObjects[char].name.Size = 13
             espObjects[char].name.Center = true
             espObjects[char].name.Outline = true
-            espObjects[char].dist.Size = 12
-            espObjects[char].dist.Center = true
-            espObjects[char].dist.Outline = true
         end
 
         local obj = espObjects[char]
@@ -74,13 +109,12 @@ local function UpdateESP()
         if info.Type == "Player" and Config.ESP.Players then show = true; color = Color3.fromRGB(60, 150, 255) end
         if info.Type == "Listener" and Config.ESP.Monsters then show = true; color = Color3.fromRGB(255, 60, 60) end
         if info.Type == "Hound" and Config.ESP.Monsters then show = true; color = Color3.fromRGB(200, 60, 255) end
+        if info.Type == "Loot" and Config.ESP.Loot then show = true; color = Color3.fromRGB(255, 215, 0) end
 
-        local root = char:FindFirstChild("HumanoidRootPart")
-        local head = char:FindFirstChild("Head") or root
-
-        if show and root and head then
-            local top3 = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 1, 0))
-            local bot3 = Camera:WorldToViewportPoint(root.Position - Vector3.new(0, 2.5, 0))
+        local root = info.Root
+        if show and root then
+            local top3 = Camera:WorldToViewportPoint(root.Position + Vector3.new(0, 1.5, 0))
+            local bot3 = Camera:WorldToViewportPoint(root.Position - Vector3.new(0, 1.5, 0))
             if top3.Z > 0 and bot3.Z > 0 then
                 local topV, botV = Vector2.new(top3.X, top3.Y), Vector2.new(bot3.X, bot3.Y)
                 local h = botV.Y - topV.Y
@@ -92,26 +126,26 @@ local function UpdateESP()
                 obj.name.Visible, obj.name.Color = Config.ESP.Name, color
                 obj.name.Text = "[" .. info.Type .. "]"
                 obj.name.Position = Vector2.new(topV.X, topV.Y - 16)
-                obj.dist.Visible = Config.ESP.Dist
-                obj.dist.Text = math.floor((Camera.CFrame.Position - root.Position).Magnitude) .. "m"
-                obj.dist.Position = Vector2.new(topV.X, botV.Y + 2)
             else
-                obj.box.Visible, obj.name.Visible, obj.dist.Visible = false, false, false
+                obj.box.Visible, obj.name.Visible = false, false
             end
         else
-            obj.box.Visible, obj.name.Visible, obj.dist.Visible = false, false, false
+            obj.box.Visible, obj.name.Visible = false, false
         end
     end
 end
 
--- AIMBOT
-local function GetTarget()
+-- SILENT AIM & AIMBOT (HOOK)
+local function GetTarget(silent)
     local mouse = UserInputService:GetMouseLocation()
+    local center = Camera.ViewportSize / 2
+    local targetPos = silent and center or mouse
+    
     local camPos = Camera.CFrame.Position
     local best, bestDist = nil, Config.Aimbot.FOV
 
     for char, info in pairs(CachedEntities) do
-        if Config.Aimbot.Target == "All" or info.Type == Config.Aimbot.Target then
+        if info.Type ~= "Loot" and (Config.Aimbot.Target == "All" or info.Type == Config.Aimbot.Target) then
             local part = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
             if part then
                 if Config.Aimbot.WallCheck then
@@ -122,7 +156,7 @@ local function GetTarget()
                 end
                 local sp = Camera:WorldToViewportPoint(part.Position)
                 if sp.Z > 0 then
-                    local d = (Vector2.new(sp.X, sp.Y) - mouse).Magnitude
+                    local d = (Vector2.new(sp.X, sp.Y) - targetPos).Magnitude
                     if d < bestDist then best, bestDist = part, d end
                 end
             end
@@ -131,57 +165,51 @@ local function GetTarget()
     return best
 end
 
+-- Hook do Mouse
+local oldIndex
+local mt = getrawmetatable(game)
+setreadonly(mt, false)
+oldIndex = mt.__index
+mt.__index = newcclosure(function(self, key)
+    if Config.Aimbot.Enabled and Config.Aimbot.Silent then
+        local isKeyDown = Config.Aimbot.Key.EnumType == Enum.KeyCode and UserInputService:IsKeyDown(Config.Aimbot.Key) or UserInputService:IsMouseButtonPressed(Config.Aimbot.Key)
+        if isKeyDown and self == Mouse then
+            if key == "Hit" or key == "Target" then
+                local target = GetTarget(true)
+                if target then return target end
+            end
+        end
+    end
+    return oldIndex(self, key)
+end)
+setreadonly(mt, true)
+
 RunService:BindToRenderStep("CobbleHushAimbot", Enum.RenderPriority.Camera.Value + 1, function()
-    if not Config.Aimbot.Enabled then return end
+    if not Config.Aimbot.Enabled or Config.Aimbot.Silent then return end
     local isKeyDown = Config.Aimbot.Key.EnumType == Enum.KeyCode and UserInputService:IsKeyDown(Config.Aimbot.Key) or UserInputService:IsMouseButtonPressed(Config.Aimbot.Key)
     if isKeyDown then
-        local target = GetTarget()
+        local target = GetTarget(false)
         if target then
             Camera.CFrame = Camera.CFrame:Lerp(CFrame.lookAt(Camera.CFrame.Position, target.Position), Config.Aimbot.Smoothness)
         end
     end
 end)
 
--- FLY & UTILS LOOP
 RunService.RenderStepped:Connect(function()
     UpdateESP()
-    fovCircle.Visible = Config.Aimbot.Enabled
+    fovCircle.Visible = Config.Aimbot.Enabled and not Config.Aimbot.Silent
     if fovCircle.Visible then
         fovCircle.Position = UserInputService:GetMouseLocation()
         fovCircle.Radius = Config.Aimbot.FOV
     end
+end)
 
-    -- Lógica de Voo (Física via BodyVelocity)
+RunService.Stepped:Connect(function()
     local char = LocalPlayer.Character
     if char then
-        local hrp = char:FindFirstChild("HumanoidRootPart")
         local hum = char:FindFirstChildOfClass("Humanoid")
-        
-        if hrp and hum then
-            if Config.Fly.Enabled then
-                flyBV.Parent = hrp
-                hum.PlatformStand = true
-                local move = Vector3.zero
-                if UserInputService:IsKeyDown(Enum.KeyCode.W) then move = move + Camera.CFrame.LookVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.S) then move = move - Camera.CFrame.LookVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.A) then move = move - Camera.CFrame.RightVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.D) then move = move + Camera.CFrame.RightVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move = move + Vector3.new(0, 1, 0) end
-                if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then move = move - Vector3.new(0, 1, 0) end
-                flyBV.Velocity = move * Config.Fly.Speed
-            else
-                if flyBV.Parent then flyBV.Parent = nil end
-                hum.PlatformStand = false
-            end
-
-            hum.WalkSpeed = Config.Util.ForceCrouch and 6 or Config.Util.Speed
-            
-            if Config.Util.SilentWalk then 
-                for _, v in ipairs(char:GetDescendants()) do 
-                    if v:IsA("Sound") then v.Volume = 0; v.Playing = false end 
-                end 
-            end
-        end
+        if hum then hum.WalkSpeed = Config.Util.Speed end
+        if Config.Util.SilentWalk then for _, v in ipairs(char:GetDescendants()) do if v:IsA("Sound") then v.Volume = 0; v.Playing = false end end end
     end
 end)
 
@@ -189,5 +217,9 @@ getgenv().Cobble_Unload = function()
     pcall(function() RunService:UnbindFromRenderStep("CobbleHushAimbot") end)
     for _, obj in pairs(espObjects) do for _, d in pairs(obj) do pcall(function() d:Remove() end) end end
     pcall(function() fovCircle:Remove() end)
-    pcall(function() flyBV:Destroy() end)
+    pcall(function()
+        setreadonly(mt, false)
+        mt.__index = oldIndex
+        setreadonly(mt, true)
+    end)
 end
