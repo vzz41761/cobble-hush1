@@ -1,15 +1,8 @@
--- cobble hills UI (HUSH V3)
+-- cobble hills UI (HUSH V3.6)
 local UserInputService = game:GetService("UserInputService")
 local TweenService     = game:GetService("TweenService")
 local Config = getgenv().CobbleConfig
 if not Config then warn("[cobble] Config ausente — carregue o Logic primeiro."); return end
-
--- garante Aim presente mesmo se UI subir antes do merge
-Config.Aim = Config.Aim or {
-    Enabled = false, AlwaysOn = false, Key = Enum.KeyCode.E,
-    FOV = 120, Smooth = 0.55, FireRate = 1/45,
-    ShowFOV = true, InvertYaw = false, InvertPitch = false,
-}
 
 local Theme = {
     Bg = Color3.fromRGB(16, 18, 25), Sidebar = Color3.fromRGB(22, 24, 33),
@@ -30,8 +23,8 @@ local ok, hui = pcall(function() return gethui and gethui() end)
 Gui.Parent = (ok and hui) or game:GetService("CoreGui")
 
 local Main = Instance.new("Frame")
-Main.Size = UDim2.fromOffset(500, 420)
-Main.Position = UDim2.new(0.5, -250, 0.5, -210)
+Main.Size = UDim2.fromOffset(500, 440)
+Main.Position = UDim2.new(0.5, -250, 0.5, -220)
 Main.BackgroundColor3 = Theme.Bg
 Main.BorderSizePixel = 0
 Main.Parent = Gui
@@ -47,7 +40,7 @@ TitleText.Size = UDim2.new(1, -30, 1, 0)
 TitleText.Position = UDim2.fromOffset(20, 0)
 TitleText.BackgroundTransparency = 1
 TitleText.Font = Enum.Font.GothamBold
-TitleText.Text = "COBBLE <font color='#5A8CFF'>HUSH</font> <font color='#787E91'>v3</font>"
+TitleText.Text = "COBBLE <font color='#5A8CFF'>HUSH</font> <font color='#787E91'>v3.6</font>"
 TitleText.RichText = true
 TitleText.TextColor3 = Theme.Text
 TitleText.TextSize = 18
@@ -85,7 +78,7 @@ Scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 Scroll.Parent = Content
 
 local ScrollLayout = Instance.new("UIListLayout", Scroll)
-ScrollLayout.Padding = UDim.new(0, 10)
+ScrollLayout.Padding = UDim.new(0, 8)
 ScrollLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     Scroll.CanvasSize = UDim2.new(0, 0, 0, ScrollLayout.AbsoluteContentSize.Y + 10)
 end)
@@ -119,7 +112,7 @@ end
 
 local function CreateToggle(text, get, set)
     local row = Instance.new("Frame")
-    row.Size = UDim2.new(1, 0, 0, 32)
+    row.Size = UDim2.new(1, 0, 0, 30)
     row.BackgroundTransparency = 1
     row.Parent = Scroll
     local label = Instance.new("TextLabel")
@@ -134,12 +127,12 @@ local function CreateToggle(text, get, set)
     local track = Instance.new("Frame")
     track.AnchorPoint = Vector2.new(1, 0.5)
     track.Position = UDim2.new(1, 0, 0.5, 0)
-    track.Size = UDim2.fromOffset(38, 20)
+    track.Size = UDim2.fromOffset(36, 18)
     track.BackgroundColor3 = Theme.Off
     track.Parent = row
     Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
     local dot = Instance.new("Frame")
-    dot.Size = UDim2.fromOffset(16, 16)
+    dot.Size = UDim2.fromOffset(14, 14)
     dot.Position = UDim2.fromOffset(2, 2)
     dot.BackgroundColor3 = Theme.Muted
     dot.Parent = track
@@ -166,7 +159,7 @@ end
 local function CreateSlider(text, min, max, get, set, step)
     step = step or 1
     local holder = Instance.new("Frame")
-    holder.Size = UDim2.new(1, 0, 0, 48)
+    holder.Size = UDim2.new(1, 0, 0, 44)
     holder.BackgroundTransparency = 1
     holder.Parent = Scroll
 
@@ -216,26 +209,21 @@ local function CreateSlider(text, min, max, get, set, step)
         local a = math.clamp((v - min) / (max - min), 0, 1)
         fill.Size = UDim2.new(a, 0, 1, 0)
         handle.Position = UDim2.new(a, 0, 0.5, 0)
-        if step >= 1 then
-            valText.Text = tostring(math.floor(v))
-        else
-            valText.Text = string.format("%.2f", v)
-        end
+        if step >= 1 then valText.Text = tostring(math.floor(v))
+        else valText.Text = string.format("%.2f", v) end
     end
 
     local dragging = false
     local function SetFromX(x)
         local a = math.clamp((x - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
         local raw = min + (max - min) * a
-        local quantized = math.floor(raw / step + 0.5) * step
-        set(math.clamp(quantized, min, max))
+        local q = math.floor(raw / step + 0.5) * step
+        set(math.clamp(q, min, max))
         Refresh()
     end
 
     track.InputBegan:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true; SetFromX(i.Position.X)
-        end
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true; SetFromX(i.Position.X) end
     end)
     UserInputService.InputEnded:Connect(function(i)
         if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
@@ -246,9 +234,9 @@ local function CreateSlider(text, min, max, get, set, step)
     Refresh()
 end
 
-local function CreateButton(text, color, callback)
+local function CreateButton(text, color, callback, selected)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, 0, 0, 36)
+    btn.Size = UDim2.new(1, 0, 0, 34)
     btn.BackgroundColor3 = color
     btn.Font = Enum.Font.GothamBold
     btn.TextColor3 = Color3.new(1,1,1)
@@ -261,10 +249,9 @@ local function CreateButton(text, color, callback)
     return btn
 end
 
--- keybind capture
 local function CreateKeybind(text, get, set)
     local row = Instance.new("Frame")
-    row.Size = UDim2.new(1, 0, 0, 32)
+    row.Size = UDim2.new(1, 0, 0, 30)
     row.BackgroundTransparency = 1
     row.Parent = Scroll
     local label = Instance.new("TextLabel")
@@ -277,7 +264,7 @@ local function CreateKeybind(text, get, set)
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.Parent = row
     local keyBtn = Instance.new("TextButton")
-    keyBtn.Size = UDim2.fromOffset(100, 24)
+    keyBtn.Size = UDim2.fromOffset(100, 22)
     keyBtn.AnchorPoint = Vector2.new(1, 0.5)
     keyBtn.Position = UDim2.new(1, 0, 0.5, 0)
     keyBtn.BackgroundColor3 = Theme.Surface
@@ -295,7 +282,7 @@ local function CreateKeybind(text, get, set)
         keyBtn.Text = "pressione..."
         keyBtn.TextColor3 = Theme.Muted
     end)
-    UserInputService.InputBegan:Connect(function(input, gpe)
+    UserInputService.InputBegan:Connect(function(input)
         if not capturing then return end
         if input.UserInputType == Enum.UserInputType.Keyboard then
             set(input.KeyCode)
@@ -327,28 +314,77 @@ local function LoadTab(tabName)
     if tabName == "Visuals" then
         CreateSection("JOGADORES")
         CreateToggle("ESP Habilitado", function() return Config.ESP.Enabled end, function(v) Config.ESP.Enabled = v end)
-        CreateToggle("Box + Health Bar", function() return Config.ESP.Box end, function(v) Config.ESP.Box = v end)
-        CreateToggle("Chams (Highlight)", function() return Config.ESP.Chams end, function(v) Config.ESP.Chams = v end)
+        CreateToggle("Box + Health", function() return Config.ESP.Box end, function(v) Config.ESP.Box = v end)
+        CreateToggle("Chams", function() return Config.ESP.Chams end, function(v) Config.ESP.Chams = v end)
         CreateToggle("Nome", function() return Config.ESP.Name end, function(v) Config.ESP.Name = v end)
         CreateToggle("Distância", function() return Config.ESP.Dist end, function(v) Config.ESP.Dist = v end)
 
-        CreateSection("LOOT")
+        CreateSection("LOOT — GERAL")
         CreateToggle("Loot ESP", function() return Config.Loot.Enabled end, function(v) Config.Loot.Enabled = v end)
-        CreateSlider("Alcance (m)", 50, 500, function() return Config.Loot.MaxDist end, function(v) Config.Loot.MaxDist = v end, 10)
+        CreateToggle("Mostrar nomes", function() return Config.Loot.Labels end, function(v) Config.Loot.Labels = v end)
+        CreateSlider("Alcance (m)", 30, 500, function() return Config.Loot.MaxDist end, function(v) Config.Loot.MaxDist = v end, 10)
+
+        CreateSection("LOOT — TIERS")
+        CreateToggle("T0 — Armas", function() return Config.Loot.TierEnabled[0] end, function(v) Config.Loot.TierEnabled[0] = v end)
+        CreateToggle("T1 — Médico/Tool", function() return Config.Loot.TierEnabled[1] end, function(v) Config.Loot.TierEnabled[1] = v end)
+        CreateToggle("T2 — Mobília", function() return Config.Loot.TierEnabled[2] end, function(v) Config.Loot.TierEnabled[2] = v end)
+        CreateToggle("T3 — Info", function() return Config.Loot.TierEnabled[3] end, function(v) Config.Loot.TierEnabled[3] = v end)
+
+        CreateSection("LOOT — CONTAINERS")
+        local containers = (getgenv().Cobble_LootContainers and getgenv().Cobble_LootContainers()) or {}
+        local lastTier = nil
+        local tierNames = { [0]="T0 — Armas", [1]="T1 — Médico/Tool", [2]="T2 — Mobília", [3]="T3 — Info" }
+        for _, c in ipairs(containers) do
+            if c.Tier ~= lastTier then
+                lastTier = c.Tier
+                local lbl = Instance.new("TextLabel")
+                lbl.Size = UDim2.new(1, 0, 0, 16)
+                lbl.BackgroundTransparency = 1
+                lbl.Font = Enum.Font.Gotham
+                lbl.Text = tierNames[c.Tier] or ("T" .. tostring(c.Tier))
+                lbl.TextColor3 = Theme.Muted
+                lbl.TextSize = 11
+                lbl.TextXAlignment = Enum.TextXAlignment.Left
+                lbl.Parent = Scroll
+            end
+            local nm = c.Name
+            CreateToggle(nm,
+                function() return Config.Loot.PerContainer[nm] ~= false end,
+                function(v) Config.Loot.PerContainer[nm] = v end)
+        end
+        CreateButton("RE-SCAN CONTAINERS", Theme.Surface, function()
+            LoadTab("Visuals")
+        end)
 
     elseif tabName == "Aim" then
-        CreateSection("SILENT AIM (LOOK REMOTE)")
+        CreateSection("AIMBOT")
         CreateToggle("Habilitado", function() return Config.Aim.Enabled end, function(v) Config.Aim.Enabled = v end)
         CreateToggle("Sempre Ativo", function() return Config.Aim.AlwaysOn end, function(v) Config.Aim.AlwaysOn = v end)
         CreateKeybind("Tecla de mira", function() return Config.Aim.Key end, function(v) Config.Aim.Key = v end)
         CreateToggle("Mostrar FOV", function() return Config.Aim.ShowFOV end, function(v) Config.Aim.ShowFOV = v end)
+        CreateToggle("Debug", function() return Config.Aim.Debug end, function(v) Config.Aim.Debug = v end)
+
+        CreateSection("MODO")
+        CreateToggle("Visual (câmera gruda)", function() return Config.Aim.Visual end, function(v) Config.Aim.Visual = v end)
+        CreateToggle("Silent (câmera não mexe)", function() return Config.Aim.Silent end, function(v) Config.Aim.Silent = v end)
 
         CreateSection("TUNING")
         CreateSlider("FOV (px)", 20, 400, function() return Config.Aim.FOV end, function(v) Config.Aim.FOV = v end, 5)
         CreateSlider("Suavidade", 0.05, 1.0, function() return Config.Aim.Smooth end, function(v) Config.Aim.Smooth = v end, 0.05)
-        CreateSlider("Taxa de envio (Hz)", 10, 60, function() return 1 / Config.Aim.FireRate end, function(v) Config.Aim.FireRate = 1 / v end, 1)
+        CreateSlider("Predição (s)", 0.0, 0.3, function() return Config.Aim.Prediction end, function(v) Config.Aim.Prediction = v end, 0.01)
 
-        CreateSection("CALIBRAÇÃO")
+        CreateSection("OSSO")
+        local function boneBtn(label, key)
+            local btn = CreateButton(label, Config.Aim.Bone == key and Theme.Accent or Theme.Surface, function()
+                Config.Aim.Bone = key
+                LoadTab("Aim")
+            end)
+        end
+        boneBtn("Head", "head")
+        boneBtn("Chest", "chest")
+        boneBtn("Root", "root")
+
+        CreateSection("CALIBRAÇÃO (silent only)")
         CreateToggle("Inverter Yaw", function() return Config.Aim.InvertYaw end, function(v) Config.Aim.InvertYaw = v end)
         CreateToggle("Inverter Pitch", function() return Config.Aim.InvertPitch end, function(v) Config.Aim.InvertPitch = v end)
 
@@ -373,7 +409,7 @@ Tabs.Utils.MouseButton1Click:Connect(function() LoadTab("Utils") end)
 LoadTab("Visuals")
 
 -- drag da janela
-local dragging, dragInput, dragStart, startPos
+local dragging, dragStart, startPos
 TitleBar.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         dragging = true; dragStart = input.Position; startPos = Main.Position
