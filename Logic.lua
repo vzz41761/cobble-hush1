@@ -12,7 +12,13 @@ local Camera = Workspace.CurrentCamera
 getgenv().CobbleConfig = {
     ESP = { Enabled = true, Players = false, Monsters = true, Box = true, Name = true, Dist = true },
     Aimbot = { Enabled = true, HoldMode = true, Key = Enum.UserInputType.MouseButton2, FOV = 150, Smoothness = 0.25, Target = "Listener", WallCheck = true },
-    Util = { NoClip = false, Speed = 16, SilentWalk = true, ForceCrouch = false }
+    Util = { NoClip = false, Speed = 16, SilentWalk = true, ForceCrouch = false },
+    -- ADICIONE SEUS TELEPORTES AQUI EMBAIXO (substitua os números)
+    Teleports = {
+        ["Spawn"] = Vector3.new(0, 10, 0),
+        ["Casa Vermelha"] = Vector3.new(100, 10, 150),
+        ["Esconderijo"] = Vector3.new(-200, 5, 50)
+    }
 }
 
 local Config = getgenv().CobbleConfig
@@ -152,6 +158,17 @@ RunService.Stepped:Connect(function()
         if Config.Util.SilentWalk then for _, v in ipairs(char:GetDescendants()) do if v:IsA("Sound") then v.Volume = 0; v.Playing = false end end end
     end
 end)
+
+-- Função de Teleporte
+getgenv().CobbleTP = function(name)
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        local pos = Config.Teleports[name]
+        if pos then
+            char.HumanoidRootPart.CFrame = CFrame.new(pos + Vector3.new(0, 3, 0))
+        end
+    end
+end
 
 getgenv().Cobble_Unload = function()
     pcall(function() RunService:UnbindFromRenderStep("CobbleHushAimbot") end)
