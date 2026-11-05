@@ -1,13 +1,14 @@
--- cobble hills UI (REAL HUSH OPTIMIZED)
+-- cobble hills UI (HUSH ULTIMATE)
 local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
+local TweenService     = game:GetService("TweenService")
 local Config = getgenv().CobbleConfig
+if not Config then return end
 
 local Theme = {
-    bg = Color3.fromRGB(15, 16, 20), sidebar = Color3.fromRGB(20, 21, 27),
-    surface = Color3.fromRGB(30, 32, 40), text = Color3.fromRGB(220, 222, 230),
-    muted = Color3.fromRGB(120, 126, 142), accent = Color3.fromRGB(90, 140, 255),
-    off = Color3.fromRGB(45, 48, 56)
+    Bg = Color3.fromRGB(16, 18, 25), Sidebar = Color3.fromRGB(22, 24, 33),
+    Surface = Color3.fromRGB(30, 33, 45), Text = Color3.fromRGB(240, 242, 250),
+    Muted = Color3.fromRGB(120, 126, 145), Accent = Color3.fromRGB(90, 140, 255),
+    Off = Color3.fromRGB(40, 44, 58), Green = Color3.fromRGB(80, 220, 130)
 }
 
 local function Tween(inst, props, time)
@@ -15,94 +16,114 @@ local function Tween(inst, props, time)
 end
 
 local Gui = Instance.new("ScreenGui")
-Gui.Name = "cobble_hush_ui"
+Gui.Name = "CobbleMaster"
 Gui.ResetOnSpawn = false
 Gui.IgnoreGuiInset = true
-Gui.Parent = pcall(function() return gethui and gethui() end) and gethui() or game:GetService("CoreGui")
+local ok, hui = pcall(function() return gethui and gethui() end)
+Gui.Parent = (ok and hui) or game:GetService("CoreGui")
 
 local Main = Instance.new("Frame")
-Main.Size = UDim2.fromOffset(500, 420)
-Main.Position = UDim2.new(0.5, -250, 0.5, -210)
-Main.BackgroundColor3 = Theme.bg
+Main.Size = UDim2.fromOffset(500, 400)
+Main.Position = UDim2.new(0.5, -250, 0.5, -200)
+Main.BackgroundColor3 = Theme.Bg
 Main.BorderSizePixel = 0
 Main.Parent = Gui
-Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 12)
+local stroke = Instance.new("UIStroke", Main)
+stroke.Color = Theme.Accent; stroke.Transparency = 0.8
+
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1, 0, 0, 50)
+TitleBar.BackgroundTransparency = 1
+TitleBar.Parent = Main
+
+local TitleText = Instance.new("TextLabel")
+TitleText.Size = UDim2.new(1, -30, 1, 0)
+TitleText.Position = UDim2.fromOffset(20, 0)
+TitleText.BackgroundTransparency = 1
+TitleText.Font = Enum.Font.GothamBold
+TitleText.Text = "COBBLE <font color='#5A8CFF'>HUSH</font>"
+TitleText.RichText = true
+TitleText.TextColor3 = Theme.Text
+TitleText.TextSize = 18
+TitleText.TextXAlignment = Enum.TextXAlignment.Left
+TitleText.Parent = TitleBar
 
 local Sidebar = Instance.new("Frame")
-Sidebar.Size = UDim2.new(0, 140, 1, 0)
-Sidebar.BackgroundColor3 = Theme.sidebar
+Sidebar.Size = UDim2.new(0, 130, 1, -70)
+Sidebar.Position = UDim2.new(0, 15, 0, 55)
+Sidebar.BackgroundColor3 = Theme.Sidebar
 Sidebar.Parent = Main
 Instance.new("UICorner", Sidebar).CornerRadius = UDim.new(0, 10)
 
-local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, 0, 0, 50)
-Title.BackgroundTransparency = 1
-Title.Font = Enum.Font.GothamBold
-Title.Text = "COBBLE.CC"
-Title.TextColor3 = Theme.accent
-Title.TextSize = 16
-Title.Parent = Sidebar
-
 local TabContainer = Instance.new("Frame")
-TabContainer.Size = UDim2.new(1, -20, 1, -60)
-TabContainer.Position = UDim2.new(0, 10, 0, 50)
+TabContainer.Size = UDim2.new(1, -20, 1, -20)
+TabContainer.Position = UDim2.new(0, 10, 0, 10)
 TabContainer.BackgroundTransparency = 1
 TabContainer.Parent = Sidebar
-Instance.new("UIListLayout", TabContainer).Padding = UDim.new(0, 5)
+Instance.new("UIListLayout", TabContainer).Padding = UDim.new(0, 8)
 
-local ContentContainer = Instance.new("Frame")
-ContentContainer.Size = UDim2.new(1, -160, 1, -20)
-ContentContainer.Position = UDim2.new(0, 150, 0, 10)
-ContentContainer.BackgroundTransparency = 1
-ContentContainer.Parent = Main
+local Content = Instance.new("Frame")
+Content.Size = UDim2.new(1, -160, 1, -70)
+Content.Position = UDim2.new(0, 155, 0, 55)
+Content.BackgroundColor3 = Theme.Sidebar
+Content.Parent = Main
+Instance.new("UICorner", Content).CornerRadius = UDim.new(0, 10)
 
 local Scroll = Instance.new("ScrollingFrame")
-Scroll.Size = UDim2.new(1, 0, 1, 0)
+Scroll.Size = UDim2.new(1, -20, 1, -20)
+Scroll.Position = UDim2.new(0, 10, 0, 10)
 Scroll.BackgroundTransparency = 1
-Scroll.ScrollBarThickness = 2
-Scroll.ScrollBarImageColor3 = Theme.accent
+Scroll.ScrollBarThickness = 3
+Scroll.ScrollBarImageColor3 = Theme.Accent
 Scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-Scroll.Parent = ContentContainer
-Instance.new("UIListLayout", Scroll).Padding = UDim.new(0, 8)
+Scroll.Parent = Content
 
-local function MakeTab(text)
+local ScrollLayout = Instance.new("UIListLayout", Scroll)
+ScrollLayout.Padding = UDim.new(0, 10)
+ScrollLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    Scroll.CanvasSize = UDim2.new(0, 0, 0, ScrollLayout.AbsoluteContentSize.Y + 10)
+end)
+
+local function CreateTab(text)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, 0, 0, 35)
-    btn.BackgroundColor3 = Theme.bg
+    btn.Size = UDim2.new(1, 0, 0, 36)
+    btn.BackgroundColor3 = Theme.Bg
     btn.Font = Enum.Font.GothamMedium
     btn.Text = text
-    btn.TextColor3 = Theme.muted
+    btn.TextColor3 = Theme.Muted
     btn.TextSize = 13
+    btn.AutoButtonColor = false
     btn.Parent = TabContainer
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
     return btn
 end
 
-local function MakeToggle(text, get, set)
+local function CreateToggle(text, get, set)
     local row = Instance.new("Frame")
-    row.Size = UDim2.new(1, 0, 0, 30)
+    row.Size = UDim2.new(1, 0, 0, 32)
     row.BackgroundTransparency = 1
     row.Parent = Scroll
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, -60, 1, 0)
     label.BackgroundTransparency = 1
-    label.Font = Enum.Font.Gotham
+    label.Font = Enum.Font.GothamMedium
     label.Text = text
-    label.TextColor3 = Theme.text
+    label.TextColor3 = Theme.Text
     label.TextSize = 13
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.Parent = row
     local track = Instance.new("Frame")
     track.AnchorPoint = Vector2.new(1, 0.5)
     track.Position = UDim2.new(1, 0, 0.5, 0)
-    track.Size = UDim2.fromOffset(36, 18)
-    track.BackgroundColor3 = Theme.off
+    track.Size = UDim2.fromOffset(38, 20)
+    track.BackgroundColor3 = Theme.Off
     track.Parent = row
     Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
     local dot = Instance.new("Frame")
-    dot.Size = UDim2.fromOffset(14, 14)
+    dot.Size = UDim2.fromOffset(16, 16)
     dot.Position = UDim2.fromOffset(2, 2)
-    dot.BackgroundColor3 = Theme.muted
+    dot.BackgroundColor3 = Theme.Muted
     dot.Parent = track
     Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
     local btn = Instance.new("TextButton")
@@ -110,140 +131,54 @@ local function MakeToggle(text, get, set)
     btn.BackgroundTransparency = 1
     btn.Text = ""
     btn.Parent = row
-    local function refresh()
+
+    local function Refresh()
         if get() then
-            Tween(track, {BackgroundColor3 = Theme.accent})
+            Tween(track, {BackgroundColor3 = Theme.Accent})
             Tween(dot, {Position = UDim2.fromOffset(20, 2), BackgroundColor3 = Color3.new(1,1,1)})
         else
-            Tween(track, {BackgroundColor3 = Theme.off})
-            Tween(dot, {Position = UDim2.fromOffset(2, 2), BackgroundColor3 = Theme.muted})
+            Tween(track, {BackgroundColor3 = Theme.Off})
+            Tween(dot, {Position = UDim2.fromOffset(2, 2), BackgroundColor3 = Theme.Muted})
         end
     end
-    btn.MouseButton1Click:Connect(function() set(not get()); refresh() end)
-    refresh()
+    btn.MouseButton1Click:Connect(function() set(not get()); Refresh() end)
+    Refresh()
 end
 
-local function MakeButton(text, color, callback)
+local function CreateButton(text, color, callback)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, 0, 0, 35)
+    btn.Size = UDim2.new(1, 0, 0, 36)
     btn.BackgroundColor3 = color
     btn.Font = Enum.Font.GothamBold
     btn.TextColor3 = Color3.new(1,1,1)
     btn.TextSize = 13
     btn.Text = text
+    btn.AutoButtonColor = false
     btn.Parent = Scroll
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
     btn.MouseButton1Click:Connect(callback)
 end
 
-local function MakeSlider(text, min, max, get, set)
-    local holder = Instance.new("Frame")
-    holder.Size = UDim2.new(1, 0, 0, 45)
-    holder.BackgroundTransparency = 1
-    holder.Parent = Scroll
-    
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -50, 0, 15)
-    label.BackgroundTransparency = 1
-    label.Font = Enum.Font.Gotham
-    label.Text = text
-    label.TextColor3 = Theme.text
-    label.TextSize = 13
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = holder
-
-    local valText = Instance.new("TextLabel")
-    valText.Size = UDim2.new(50, 0, 0, 15)
-    valText.Position = UDim2.new(1, -50, 0, 0)
-    valText.BackgroundTransparency = 1
-    valText.Font = Enum.Font.Gotham
-    valText.TextColor3 = Theme.muted
-    valText.TextSize = 12
-    valText.TextXAlignment = Enum.TextXAlignment.Right
-    valText.Parent = holder
-
-    local track = Instance.new("Frame")
-    track.Size = UDim2.new(1, 0, 0, 6)
-    track.Position = UDim2.new(0, 0, 0, 25)
-    track.BackgroundColor3 = Theme.off
-    track.Parent = holder
-    Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
-
-    local fill = Instance.new("Frame")
-    fill.Size = UDim2.new(0, 0, 1, 0)
-    fill.BackgroundColor3 = Theme.accent
-    fill.Parent = track
-    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
-
-    local function refresh()
-        local v = get()
-        local a = math.clamp((v - min) / (max - min), 0, 1)
-        fill.Size = UDim2.new(a, 0, 1, 0)
-        valText.Text = tostring(math.floor(v))
-    end
-
-    local dragging = false
-    local function setFromX(x)
-        local a = math.clamp((x - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
-        set(math.floor(min + (max - min) * a))
-        refresh()
-    end
-
-    track.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true; setFromX(i.Position.X) end end)
-    UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
-    UserInputService.InputChanged:Connect(function(i) if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then setFromX(i.Position.X) end end)
-    refresh()
-end
-
-local Tabs = { Visuals = MakeTab("Visuals"), Combat = MakeTab("Combat"), Utils = MakeTab("Utils") }
+local Tabs = { Visuals = CreateTab("Visuals"), Utils = CreateTab("Utils") }
 
 local function LoadTab(tabName)
-    for _, v in ipairs(Scroll:GetChildren()) do if v:IsA("Frame") or v:IsA("TextButton") then v:Destroy() end end
-    for name, btn in pairs(Tabs) do btn.TextColor3 = (name == tabName) and Theme.accent or Theme.muted end
+    for _, v in ipairs(Scroll:GetChildren()) do
+        if v:IsA("Frame") or v:IsA("TextButton") then v:Destroy() end
+    end
+    for name, btn in pairs(Tabs) do
+        btn.TextColor3 = (name == tabName) and Theme.Accent or Theme.Muted
+    end
 
     if tabName == "Visuals" then
-        MakeToggle("ESP Enabled", function() return Config.ESP.Enabled end, function(v) Config.ESP.Enabled = v end)
-        MakeToggle("Jogadores", function() return Config.ESP.Players end, function(v) Config.ESP.Players = v end)
-        MakeToggle("Monstros", function() return Config.ESP.Monsters end, function(v) Config.ESP.Monsters = v end)
-        MakeToggle("Loot ESP", function() return Config.ESP.Loot end, function(v) Config.ESP.Loot = v end)
-        
-        -- OS FILTROS REAIS DO HUSH
-        MakeToggle("Chaves (Keys)", 
-            function() return Config.ESP.LootFilters.Keys end, 
-            function(v) Config.ESP.LootFilters.Keys = v end)
-        MakeToggle("Remédios (Meds)", 
-            function() return Config.ESP.LootFilters.Meds end, 
-            function(v) Config.ESP.LootFilters.Meds = v end)
-        MakeToggle("Armas Básicas", 
-            function() return Config.ESP.LootFilters.Weapons end, 
-            function(v) Config.ESP.LootFilters.Weapons = v end)
-        MakeToggle("Dinheiro / Lixo", 
-            function() return Config.ESP.LootFilters.Money end, 
-            function(v) Config.ESP.LootFilters.Money = v end)
-    elseif tabName == "Combat" then
-        MakeToggle("Aimbot Enabled", function() return Config.Aimbot.Enabled end, function(v) Config.Aimbot.Enabled = v end)
-        MakeToggle("Silent Aim (Magic)", function() return Config.Aimbot.Silent end, function(v) Config.Aimbot.Silent = v end)
-        MakeToggle("Wall Check", function() return Config.Aimbot.WallCheck end, function(v) Config.Aimbot.WallCheck = v end)
-        
-        local tBtn = Instance.new("TextButton")
-        tBtn.Size = UDim2.new(1, 0, 0, 35)
-        tBtn.BackgroundColor3 = Theme.surface
-        tBtn.Text = "Alvo: " .. Config.Aimbot.Target
-        tBtn.TextColor3 = Theme.text
-        tBtn.Font = Enum.Font.Gotham
-        tBtn.Parent = Scroll
-        Instance.new("UICorner", tBtn).CornerRadius = UDim.new(0, 6)
-        tBtn.MouseButton1Click:Connect(function()
-            Config.Aimbot.Target = (Config.Aimbot.Target == "Listener") and "Hound" or ((Config.Aimbot.Target == "Hound") and "All" or "Listener")
-            tBtn.Text = "Alvo: " .. Config.Aimbot.Target
-        end)
+        CreateToggle("Jogadores ESP", function() return Config.ESP.Enabled end, function(v) Config.ESP.Enabled = v end)
+        CreateToggle("Chams (Player)", function() return Config.ESP.Chams end, function(v) Config.ESP.Chams = v end)
+        CreateToggle("Loot ESP (Itens)", function() return Config.Loot.Enabled end, function(v) Config.Loot.Enabled = v end)
     elseif tabName == "Utils" then
-        MakeToggle("Auto Pickup", function() return Config.Util.AutoPickup end, function(v) Config.Util.AutoPickup = v end)
-        MakeToggle("Hitbox Expander", function() return Config.Util.HitboxExpand end, function(v) Config.Util.HitboxExpand = v end)
-        MakeSlider("Hitbox Size", 2, 20, function() return Config.Util.HitboxSize end, function(v) Config.Util.HitboxSize = v end)
-        MakeToggle("Silent Walk", function() return Config.Util.SilentWalk end, function(v) Config.Util.SilentWalk = v end)
+        CreateToggle("Silent Walk (Zero Som)", function() return Config.Util.SilentWalk end, function(v) Config.Util.SilentWalk = v end)
+        CreateToggle("Fast Vault (Voa Rasante)", function() return Config.Util.FastVault end, function(v) Config.Util.FastVault = v end)
+        CreateToggle("Fullbright (Luz Total)", function() return Config.Util.Fullbright end, function(v) Config.Util.Fullbright = v end)
         
-        MakeButton("UNLOAD SCRIPT", Color3.fromRGB(255, 80, 80), function()
+        CreateButton("UNLOAD SCRIPT", Color3.fromRGB(255, 80, 80), function()
             if getgenv().Cobble_Unload then getgenv().Cobble_Unload() end
             Gui:Destroy()
         end)
@@ -251,9 +186,24 @@ local function LoadTab(tabName)
 end
 
 Tabs.Visuals.MouseButton1Click:Connect(function() LoadTab("Visuals") end)
-Tabs.Combat.MouseButton1Click:Connect(function() LoadTab("Combat") end)
 Tabs.Utils.MouseButton1Click:Connect(function() LoadTab("Utils") end)
 LoadTab("Visuals")
+
+local dragging, dragInput, dragStart, startPos
+TitleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true; dragStart = input.Position; startPos = Main.Position
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        Main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+end)
 
 UserInputService.InputBegan:Connect(function(input, gpe)
     if gpe then return end
