@@ -4,6 +4,7 @@ pcall(function() if setthreadidentity then setthreadidentity(8) end end)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
@@ -13,7 +14,6 @@ getgenv().CobbleConfig = {
     ESP = { Enabled = true, Players = false, Monsters = true, Box = true, Name = true, Dist = true },
     Aimbot = { Enabled = true, HoldMode = true, Key = Enum.UserInputType.MouseButton2, FOV = 150, Smoothness = 0.25, Target = "Listener", WallCheck = true },
     Util = { NoClip = false, Speed = 16, SilentWalk = true, ForceCrouch = false },
-    -- ADICIONE SEUS TELEPORTES AQUI EMBAIXO (substitua os números)
     Teleports = {
         ["Spawn"] = Vector3.new(0, 10, 0),
         ["Casa Vermelha"] = Vector3.new(100, 10, 150),
@@ -159,15 +159,31 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- Função de Teleporte
+-- FUNÇÃO DE TELEPORTE ANTI-CHEAT (TWEEN + NOCLIP)
 getgenv().CobbleTP = function(name)
     local char = LocalPlayer.Character
-    if char and char:FindFirstChild("HumanoidRootPart") then
-        local pos = Config.Teleports[name]
-        if pos then
-            char.HumanoidRootPart.CFrame = CFrame.new(pos + Vector3.new(0, 3, 0))
-        end
-    end
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    local pos = Config.Teleports[name]
+    if not pos then return end
+
+    -- Salva o estado atual do noclip e liga
+    local oldNoClip = Config.Util.NoClip
+    Config.Util.NoClip = true
+
+    -- Desliza o boneco em 0.3 segundos para o servidor achar que foi um "dash"
+    local targetCFrame = CFrame.new(pos + Vector3.new(0, 3, 0))
+    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Linear)
+    local tween = TweenService:Create(hrp, tweenInfo, {CFrame = targetCFrame})
+    
+    tween:Play()
+    
+    -- Quando chegar, desliga o noclip (se você não tiver deixado ele ligado no menu)
+    tween.Completed:Connect(function()
+        Config.Util.NoClip = oldNoClip
+    end)
 end
 
 getgenv().Cobble_Unload = function()
