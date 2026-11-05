@@ -4,7 +4,6 @@ pcall(function() if setthreadidentity then setthreadidentity(8) end end)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
@@ -159,31 +158,39 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- FUNÇÃO DE TELEPORTE ANTI-CHEAT (TWEEN + NOCLIP)
+-- TELEPORTE STEALTH (VELOCIDADE + NOCLIP)
 getgenv().CobbleTP = function(name)
     local char = LocalPlayer.Character
     if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
     
     local pos = Config.Teleports[name]
     if not pos then return end
 
-    -- Salva o estado atual do noclip e liga
+    -- Salva as configs antigas
+    local oldSpeed = Config.Util.Speed
     local oldNoClip = Config.Util.NoClip
-    Config.Util.NoClip = true
 
-    -- Desliza o boneco em 0.3 segundos para o servidor achar que foi um "dash"
-    local targetCFrame = CFrame.new(pos + Vector3.new(0, 3, 0))
-    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Linear)
-    local tween = TweenService:Create(hrp, tweenInfo, {CFrame = targetCFrame})
-    
-    tween:Play()
-    
-    -- Quando chegar, desliga o noclip (se você não tiver deixado ele ligado no menu)
-    tween.Completed:Connect(function()
-        Config.Util.NoClip = oldNoClip
-    end)
+    -- Ativa o modo "voo"
+    Config.Util.NoClip = true
+    Config.Util.Speed = 200 -- Velocidade alta, mas não instantânea
+    hum.WalkSpeed = 200
+
+    -- Move o boneco até o destino
+    hum:MoveTo(pos)
+
+    -- Espera o boneco chegar perto (ou 3 segundos)
+    local startTime = tick()
+    while (char.HumanoidRootPart.Position - pos).Magnitude > 10 and tick() - startTime < 3 do
+        task.wait()
+    end
+
+    -- Para o boneco e volta ao normal
+    hum:MoveTo(char.HumanoidRootPart.Position)
+    Config.Util.NoClip = oldNoClip
+    Config.Util.Speed = oldSpeed
+    hum.WalkSpeed = oldSpeed
 end
 
 getgenv().Cobble_Unload = function()
