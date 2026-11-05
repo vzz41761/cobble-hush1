@@ -1,4 +1,4 @@
--- cobble hills logic (REAL HUSH OPTIMIZED)
+-- cobble hills logic (DEEP LOOT SCAN)
 pcall(function() if setthreadidentity then setthreadidentity(8) end end)
 
 local Players = game:GetService("Players")
@@ -17,13 +17,12 @@ getgenv().CobbleConfig = {
         Monsters = true, 
         Loot = true, 
         MaxDist = 300,
-        -- FILTRO DE LOOT REAL
         LootFilters = {
-            Keys = true,
-            Meds = true,
-            Weapons = true,
-            Money = true,
-            Misc = false
+            Chests = true, 
+            Keys = true, 
+            Meds = true, 
+            Weapons = true, 
+            Money = true 
         }
     },
     Aimbot = { Enabled = true, Silent = true, HoldMode = true, Key = Enum.UserInputType.MouseButton2, FOV = 150, Smoothness = 0.25, Target = "Listener", WallCheck = true },
@@ -39,36 +38,27 @@ fovCircle.Thickness = 1.5
 fovCircle.NumSides = 60
 fovCircle.Color = Color3.fromRGB(90, 140, 255)
 
--- FUNÇÃO QUE CHECA SE O ITEM ENTRA NO FILTRO
-local function ShouldShowLoot(itemName)
-    local name = itemName:lower()
-    
-    if Config.ESP.LootFilters.Keys then
-        if name:find("key") or name:find("card") then return true end
+-- FUNÇÃO PRA ACHAR ITEM DENTRO DO BAÚ
+local function GetContents(itemModel)
+    local contents = ""
+    for _, child in ipairs(itemModel:GetDescendants()) do
+        if child:IsA("Tool") or child:IsA("Model") then
+            local name = child.Name:lower()
+            if name:find("gun") or name:find("pistol") or name:find("knife") or name:find("key") or name:find("ammo") then
+                contents = contents .. " [" .. child.Name .. "]"
+            end
+        end
     end
-    if Config.ESP.LootFilters.Meds then
-        if name:find("bandage") or name:find("pill") or name:find("med") or name:find("antiviral") or name:find("health") then return true end
-    end
-    if Config.ESP.LootFilters.Weapons then
-        if name:find("pistol") or name:find("revolver") or name:find("gun") or name:find("pipe") or name:find("bat") or name:find("knife") or name:find("ammo") or name:find("flashlight") then return true end
-    end
-    if Config.ESP.LootFilters.Money then
-        if name:find("coin") or name:find("cash") or name:find("scrap") or name:find("jewel") then return true end
-    end
-    if Config.ESP.LootFilters.Misc then
-        return true -- Mostra tudo se o Misc estiver ligado
-    end
-    
-    return false
+    return contents
 end
 
--- CACHE ULTRA OTIMIZADO (Só o que tá perto e é útil)
+-- CACHE ULTRA OTIMIZADO (Com Deep Scan)
 task.spawn(function()
     while task.wait(0.5) do
         local temp = {}
         local camPos = Camera.CFrame.Position
         
-        -- Players e Monstros
+        -- Players
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr ~= LocalPlayer and plr.Character then
                 local hum = plr.Character:FindFirstChildOfClass("Humanoid")
@@ -79,20 +69,52 @@ task.spawn(function()
             end
         end
 
+        -- Monstros e Loot
         for _, v in ipairs(Workspace:GetDescendants()) do
             if v:IsA("Model") then
                 local hum = v:FindFirstChildOfClass("Humanoid")
-                local hrp = v:FindFirstChild("HumanoidRootPart") or v:FindFirstChildWhichIsA("BasePart")
+                local hrp = v:FindFirstChild("HumanoidRootPart")
                 
-                if hrp and (camPos - hrp.Position).Magnitude < Config.ESP.MaxDist then
-                    if hum and hum.Health > 0 and (v.Name == "Listener" or v.Name == "Hound") then
+                -- Monstros
+                if hum and hrp and hum.Health > 0 and (v.Name == "Listener" or v.Name == "Hound") then
+                    if (camPos - hrp.Position).Magnitude < Config.ESP.MaxDist then
                         temp[v] = { Type = v.Name, Name = v.Name, Root = hrp }
-                    elseif not hum then
-                        -- É um item
-                        if ShouldShowLoot(v.Name) then
-                            temp[v] = { Type = "Loot", Name = v.Name, Root = hrp }
-                        end
                     end
+                end
+            end
+
+            -- LOOT (Tools e ProximityPrompts)
+            local root = nil
+            local itemName = ""
+            
+            if v:IsA("Tool") and v:FindFirstChild("Handle") then
+                root = v.Handle
+                itemName = v.Name
+            elseif v:IsA("ProximityPrompt") and v.Parent and v.Parent:IsA("BasePart") then
+                root = v.Parent
+                itemName = v.Parent.Parent and v.Parent.Parent.Name or v.Parent.Name
+            end
+
+            if root and (camPos - root.Position).Magnitude < Config.ESP.MaxDist then
+                local name = itemName:lower()
+                local show = false
+                local extraText = ""
+                
+                -- Filtros
+                if Config.ESP.LootFilters.Chests and (name:find("crate") or name:find("chest") or name:find("safe") or name:find("container")) then 
+                    show = true 
+                    -- Tenta ver o que tem dentro do baú
+                    if root.Parent then
+                        extraText = GetContents(root.Parent)
+                    end
+                end
+                if Config.ESP.LootFilters.Keys and (name:find("key") or name:find("card")) then show = true end
+                if Config.ESP.LootFilters.Meds and (name:find("med") or name:find("pill") or name:find("band") or name:find("anti")) then show = true end
+                if Config.ESP.LootFilters.Weapons and (name:find("gun") or name:find("pistol") or name:find("knife") or name:find("ammo") or name:find("bat")) then show = true end
+                if Config.ESP.LootFilters.Money and (name:find("coin") or name:find("cash") or name:find("scrap") or name:find("jewel")) then show = true end
+                
+                if show then
+                    temp[root] = { Type = "Loot", Name = itemName .. extraText, Root = root }
                 end
             end
         end
@@ -100,7 +122,7 @@ task.spawn(function()
     end
 end)
 
--- AUTO PICKUP RÁPIDO
+-- AUTO PICKUP
 task.spawn(function()
     while task.wait(0.1) do
         if Config.Util.AutoPickup and LocalPlayer.Character then
@@ -142,7 +164,7 @@ task.spawn(function()
     end
 end)
 
--- ESP OTIMIZADO
+-- ESP
 local function UpdateESP()
     local camPos = Camera.CFrame.Position
     local activeObjects = {}
@@ -187,7 +209,7 @@ local function UpdateESP()
     end
 end
 
--- SILENT AIM & AIMBOT
+-- AIMBOT
 local function GetTarget(silent)
     local mouse = UserInputService:GetMouseLocation()
     local center = Camera.ViewportSize / 2
