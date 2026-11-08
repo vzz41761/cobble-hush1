@@ -1,4 +1,4 @@
--- cobble hills logic (HUSH V6 - MAGIC BULLET)
+-- cobble hills logic (HUSH V6.2 - FULL RESGATE)
 pcall(function() if setthreadidentity then setthreadidentity(8) end end)
 if getgenv().Cobble_Unload then pcall(getgenv().Cobble_Unload) end
 
@@ -41,11 +41,10 @@ local defaults = {
     AutoPickupRate   = 0.7,
     Aim  = {
         Enabled=true, AlwaysOn=false, Key=Enum.UserInputType.MouseButton2,
-        FOV=30, Smooth=0.45, ShowFOV=true,
-        Bone="head", Prediction=0.15, WallCheck=true,
-        InvertYaw=false, InvertPitch=false, Debug=false,
+        FOV=60, Smooth=0.45, ShowFOV=true,
+        Bone="head", Prediction=0.15, WallCheck=true, TeamCheck=true,
         Silent=false, Visual=false, 
-        AutoFire=true, FireDelay=0.1, MagicSnap=true -- NOVIDADES DO TRIGGERBOT
+        MagicSnap=true, AutoFire=true, FireDelay=0.1 -- TRIGGERBOT
     },
     HUD  = { Enabled=true },
 }
@@ -70,8 +69,15 @@ local alive = true
 local function track(c) connections[#connections+1] = c; return c end
 
 -- ==========================================
--- LIGHTING & REMOTES
+-- FUNÇÕES DE TIME E LUZ
 -- ==========================================
+local function isTeammate(plr)
+    if not LocalPlayer.Team then return false end
+    if plr.Team == LocalPlayer.Team then return true end
+    if LocalPlayer.TeamColor and plr.TeamColor == LocalPlayer.TeamColor then return true end
+    return false
+end
+
 local FB_DEFAULT = { Ambient=Lighting.Ambient, OutdoorAmbient=Lighting.OutdoorAmbient, Brightness=Lighting.Brightness, ClockTime=Lighting.ClockTime, FogEnd=Lighting.FogEnd, ExposureCompensation=Lighting.ExposureCompensation }
 local function applyFullbright()
     Lighting.Ambient = Color3.new(1,1,1); Lighting.OutdoorAmbient = Color3.new(1,1,1)
@@ -128,13 +134,18 @@ task.spawn(function()
     while alive do
         local temp = {}
         local function add(m)
-            local hum, root = m:FindFirstChildOfClass("Humanoid"), m:FindFirstChild("HumanoidRootPart")
+            local hum = m:FindFirstChildOfClass("Humanoid")
+            local root = m:FindFirstChild("HumanoidRootPart")
             if hum and root and hum.Health > 0 then
                 temp[m] = { Model=m, Hum=hum, Root=root, Name=m.Name, Color=MONSTER_COLOR[m.Name] or Color3.fromRGB(255,120,80) }
             end
         end
         local monsters = Workspace:FindFirstChild("Monsters")
-        if monsters then for _, m in ipairs(monsters:GetChildren()) do if m:IsA("Model") then add(m) end end end
+        if monsters then 
+            for _, m in ipairs(monsters:GetChildren()) do 
+                if m:IsA("Model") then add(m) end 
+            end 
+        end
         local mother = Workspace:FindFirstChild("Mother")
         if mother and mother:IsA("Model") then add(mother) end
         CachedWalkers = temp
@@ -154,8 +165,12 @@ task.spawn(function()
                 if ext then
                     local pos
                     local prompt = ext:FindFirstChild("ExtractPrompt", true)
-                    if prompt and prompt.Parent and prompt.Parent:IsA("BasePart") then pos = prompt.Parent.Position
-                    else local bp = ext:FindFirstChildWhichIsA("BasePart", true); if bp then pos = bp.Position end end
+                    if prompt and prompt.Parent and prompt.Parent:IsA("BasePart") then 
+                        pos = prompt.Parent.Position
+                    else 
+                        local bp = ext:FindFirstChildWhichIsA("BasePart", true)
+                        if bp then pos = bp.Position end 
+                    end
                     if pos then temp[exit] = { Name=exit.Name, Pos=pos } end
                 end
             end
@@ -254,11 +269,9 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- AIMBOT + TRIGGERBOT (MAGIC BULLET)
+-- AIMBOT + TRIGGERBOT
 -- ==========================================
 local aimHeld, aimTarget = false, nil
-local curYaw, curPitch = 0, 0
-local hasAim = false
 local lastFire = 0
 
 local function isAimInput(input)
@@ -279,6 +292,7 @@ end
 
 local function pickTarget()
     if aimTarget and aimTarget.Player.Character == aimTarget.Root.Parent and aimTarget.Hum.Health > 0 then
+        if Config.Aim.TeamCheck and isTeammate(aimTarget.Player) then aimTarget = nil; return nil end
         if isVisible(aimTarget.Root.Parent) then return aimTarget end
     end
     aimTarget = nil
@@ -286,12 +300,14 @@ local function pickTarget()
     local best, bestD = nil, Config.Aim.FOV
     for _, d in pairs(CachedPlayers) do
         if d.Hum.Health > 0 and isVisible(d.Root.Parent) then
-            local part = (Config.Aim.Bone == "head" and d.Head) or (Config.Aim.Bone == "chest" and d.Root) or d.Root
-            if part then
-                local sp, on = Camera:WorldToViewportPoint(part.Position)
-                if sp.Z > 0 and on then
-                    local dist = (Vector2.new(sp.X, sp.Y) - center).Magnitude
-                    if dist < bestD then bestD = dist; best = d end
+            if not (Config.Aim.TeamCheck and isTeammate(d.Player)) then
+                local part = (Config.Aim.Bone == "head" and d.Head) or (Config.Aim.Bone == "chest" and d.Root) or d.Root
+                if part then
+                    local sp, on = Camera:WorldToViewportPoint(part.Position)
+                    if sp.Z > 0 and on then
+                        local dist = (Vector2.new(sp.X, sp.Y) - center).Magnitude
+                        if dist < bestD then bestD = dist; best = d end
+                    end
                 end
             end
         end
@@ -311,9 +327,8 @@ local function aimPointOf(t)
 end
 
 track(UserInputService.InputBegan:Connect(function(i, gpe) if not gpe and isAimInput(i) then aimHeld = true; aimTarget = nil end end))
-track(UserInputService.InputEnded:Connect(function(i) if isAimInput(i) then aimHeld = false; aimTarget = nil; hasAim = false end end))
+track(UserInputService.InputEnded:Connect(function(i) if isAimInput(i) then aimHeld = false; aimTarget = nil end end))
 
--- A Lógica do Magic Bullet no RenderStep
 RunService:BindToRenderStep("cobble_aim", Enum.RenderPriority.Camera.Value + 1, function(dt)
     if not Config.Aim.Enabled then return end
     if not (Config.Aim.AlwaysOn or aimHeld) then return end
@@ -324,7 +339,6 @@ RunService:BindToRenderStep("cobble_aim", Enum.RenderPriority.Camera.Value + 1, 
     local targetPos = aimPointOf(t)
     local oldCFrame = Camera.CFrame
 
-    -- 1. MAGIC SNAP (Trava a mira invisivelmente na cabeça)
     if Config.Aim.MagicSnap then
         Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, targetPos)
     elseif Config.Aim.Visual then
@@ -333,24 +347,22 @@ RunService:BindToRenderStep("cobble_aim", Enum.RenderPriority.Camera.Value + 1, 
         Camera.CFrame = Camera.CFrame:Lerp(want, 1 - (1 - s) ^ (dt * 60))
     end
 
-    -- 2. TRIGGERBOT / AUTO FIRE
     if Config.Aim.AutoFire and (tick() - lastFire > Config.Aim.FireDelay) then
         local char = LocalPlayer.Character
         local tool = char and char:FindFirstChildOfClass("Tool")
         if tool then
             lastFire = tick()
-            pcall(function() tool:Activate() end) -- Força o tiro
+            pcall(function() tool:Activate() end)
             if mouse1click then pcall(mouse1click) end
         end
     end
 
-    -- 3. DEVOLVE A CÂMERA (O segredo pra parecer silent)
     if Config.Aim.MagicSnap then
         Camera.CFrame = oldCFrame
     end
 end)
 
--- Silent Aim via Hook (Fallback)
+-- Silent Aim Hook Fallback
 task.spawn(function()
     if not LookRemote or not (getrawmetatable and setreadonly) then return end
     local mt = getrawmetatable(game)
@@ -358,7 +370,7 @@ task.spawn(function()
     local old = mt.__namecall
     mt.__namecall = newcclosure(function(self, ...)
         local m = getnamecallmethod()
-        if m == "FireServer" and self == LookRemote and alive and Config.Aim.Enabled and Config.Aim.Silent and (Config.Aim.AlwaysOn or aimHeld) then
+        if m == "FireServer" and self == LookRemote and alive and Config.Aim.Enabled and (Config.Aim.AlwaysOn or aimHeld) then
             local t = pickTarget()
             if t then
                 local dir = aimPointOf(t) - Camera.CFrame.Position
@@ -366,8 +378,6 @@ task.spawn(function()
                     dir = dir.Unit
                     local yaw   = math.atan2(-dir.X, -dir.Z)
                     local pitch = math.asin(math.clamp(dir.Y, -1, 1))
-                    if Config.Aim.InvertYaw   then yaw   = -yaw   end
-                    if Config.Aim.InvertPitch then pitch = -pitch end
                     return old(self, yaw, pitch)
                 end
             end
@@ -375,11 +385,10 @@ task.spawn(function()
         return old(self, ...)
     end)
     setreadonly(mt, true)
-    print("[cobble] silent aim hook instalado")
 end)
 
 -- ==========================================
--- DRAWINGS E ESP
+-- ESP DRAWINGS
 -- ==========================================
 local ESP_KEYS = {"box","hbg","hfill","dot","name","dist","weapon","hb","hbf"}
 local espData = {}
@@ -432,15 +441,22 @@ local function updatePlayerESP()
                 local botS, botOn = Camera:WorldToViewportPoint(rp - Vector3.new(0, data.SizeY*0.5, 0))
                 local rgtS        = Camera:WorldToViewportPoint(rp + camRight * (data.SizeX*0.5 + 0.05))
                 if topS.Z>0 and botS.Z>0 and rgtS.Z>0 and topOn and botOn then
-                    local cx = (topS.X + botS.X) * 0.5; local h = botS.Y - topS.Y; local w = math.abs(rgtS.X - cx) * 2
+                    local cx = (topS.X + botS.X) * 0.5
+                    local h = botS.Y - topS.Y
+                    local w = math.abs(rgtS.X - cx) * 2
                     if h > 2 and w > 1 then
                         local bx, by = cx - w*0.5, topS.Y
                         o.box.Position = Vector2.new(bx, by); o.box.Size = Vector2.new(w, h); o.box.Visible = Config.ESP.Box
-                        local frac = math.clamp(data.Hum.Health / math.max(data.Hum.MaxHealth,1), 0, 1); local hx = bx - 6
+                        local frac = math.clamp(data.Hum.Health / math.max(data.Hum.MaxHealth,1), 0, 1)
+                        local hx = bx - 6
                         o.hbg.Position = Vector2.new(hx, by); o.hbg.Size = Vector2.new(3, h); o.hbg.Visible = true
                         o.hfill.Position = Vector2.new(hx, by + h*(1-frac)); o.hfill.Size = Vector2.new(3, math.max(h*frac, 1))
                         o.hfill.Color = Color3.fromRGB(255*(1-frac), 255*frac, 60); o.hfill.Visible = true
                         o.dot.Position = Vector2.new(cx, by+8); o.dot.Visible = true
+                        
+                        local color = Config.Aim.TeamCheck and isTeammate(data.Player) and Color3.fromRGB(0,255,0) or Color3.fromRGB(255,0,0)
+                        o.box.Color = color; o.name.Color = color; o.dist.Color = color
+                        
                         o.name.Visible = Config.ESP.Name; o.name.Text = data.Player.Name; o.name.Position = Vector2.new(cx, by-16)
                         local d = math.floor((Camera.CFrame.Position - rp).Magnitude)
                         o.dist.Visible = Config.ESP.Dist; o.dist.Text = d .. "m"; o.dist.Position = Vector2.new(cx, botS.Y + 4)
@@ -620,7 +636,7 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- ACTIONS
+-- ACTIONS (INCLUINDO O MOVE ITEM)
 -- ==========================================
 local stanceSeq = 0
 getgenv().Cobble_Stance = function(state) if StanceRemote then stanceSeq = stanceSeq + 1; StanceRemote:FireServer(state and true or false, stanceSeq) end end
@@ -629,6 +645,7 @@ getgenv().Cobble_Arrest = function() local a = RemotesFolder and RemotesFolder:F
 getgenv().Cobble_Deploy = function() if DeployRemote then DeployRemote:FireServer() end end
 getgenv().Cobble_Replay = function(mode) if ReplayRemote then ReplayRemote:FireServer(mode or "start") end end
 getgenv().Cobble_Equip = function(name) local g = RemotesFolder and RemotesFolder:FindFirstChild("Gun"); if g then g:FireServer("Equip", name) end end
+getgenv().Cobble_MoveItem = function(id, qty) if InvActionRem then InvActionRem:FireServer({ action = "Safe", from = "safe", id = id, qty = qty or 1, to = "backpack" }) end end
 
 getgenv().Cobble_ForcePickup = function()
     if not LootRemote then return end
@@ -667,5 +684,5 @@ getgenv().Cobble_Unload = function()
     for _, d in ipairs({hudBg,hudHpBg,hudHpFill,hudHpText,hudWeapon,hudExtract}) do pcall(function() d:Remove() end) end
     restoreFullbright()
     if getgenv().Cobble_UI_Loaded then getgenv().Cobble_UI_Loaded:Destroy() end
-    print("[cobble] HUSH V6 Unloaded.")
+    print("[cobble] HUSH V6.2 Unloaded.")
 end
