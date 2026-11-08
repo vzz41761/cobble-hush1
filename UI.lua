@@ -18,13 +18,13 @@ local tabAim = Window:CreateTab({ Name = "AIMBOT", Icon = "crosshair" })
 tabAim:SetColumns(2)
 local secAim = tabAim:CreateSection({ Name = "Aimbot" })
 secAim:Toggle({ Name = "Ativar Aimbot", Default = true, Callback = function(v) Config.Aimbot.Enabled = v end })
-secAim:Toggle({ Name = "Silent Aim (Recomendado)", Default = true, Callback = function(v) Config.Aimbot.Silent = v end })
+secAim:Toggle({ Name = "Silent Aim", Default = true, Callback = function(v) Config.Aimbot.Silent = v end })
 secAim:Toggle({ Name = "Wall Check", Default = true, Callback = function(v) Config.Aimbot.WallCheck = v end })
 secAim:Toggle({ Name = "Party Check", Default = true, Callback = function(v) Config.Aimbot.PartyCheck = v end })
 secAim:Slider({ Name = "FOV", Min = 10, Max = 400, Default = 120, Decimals = 0, Step = 1, Callback = function(v) Config.Aimbot.FOV = v end })
 secAim:Slider({ Name = "Predição", Min = 0.0, Max = 0.4, Default = 0.15, Decimals = 2, Step = 0.01, Callback = function(v) Config.Aimbot.Prediction = v end })
 
--- ABA 2: VISUAIS
+-- ABA 2: ESP
 local tabEsp = Window:CreateTab({ Name = "ESP", Icon = "eye" })
 tabEsp:SetColumns(2)
 local secEsp = tabEsp:CreateSection({ Name = "ESP" })
