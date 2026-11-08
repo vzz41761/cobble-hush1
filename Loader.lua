@@ -8,6 +8,7 @@ end
 
 -- Puxa a Lógica e a UI do seu GitHub
 local success, err = pcall(function()
+    getgenv().CobbleConfig = nil -- Limpa a memória do script antigo
     loadstring(game:HttpGet(baseUrl .. "Logic.lua"))()
     loadstring(game:HttpGet(baseUrl .. "UI.lua"))()
 end)
