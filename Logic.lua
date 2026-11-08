@@ -1,4 +1,4 @@
--- cobble hills logic (HUSH V6.2 - FULL RESGATE)
+-- cobble hills logic (HUSH V7 - FIXED AIMBOT)
 pcall(function() if setthreadidentity then setthreadidentity(8) end end)
 if getgenv().Cobble_Unload then pcall(getgenv().Cobble_Unload) end
 
@@ -44,7 +44,7 @@ local defaults = {
         FOV=60, Smooth=0.45, ShowFOV=true,
         Bone="head", Prediction=0.15, WallCheck=true, TeamCheck=true,
         Silent=false, Visual=false, 
-        MagicSnap=true, AutoFire=true, FireDelay=0.1 -- TRIGGERBOT
+        MagicSnap=true, AutoFire=true, FireDelay=0.1
     },
     HUD  = { Enabled=true },
 }
@@ -102,7 +102,7 @@ local DeployRemote      = R("Deploy")
 local ReplayRemote      = R("Replay")
 
 -- ==========================================
--- CACHES
+-- CACHES (COM VERIFICAÇÃO DE HEAD)
 -- ==========================================
 local CachedPlayers = {}
 task.spawn(function()
@@ -114,11 +114,14 @@ task.spawn(function()
                 if char then
                     local hum  = char:FindFirstChildOfClass("Humanoid")
                     local root = char:FindFirstChild("HumanoidRootPart")
-                    if hum and root and hum.Health > 0 then
+                    local head = char:FindFirstChild("Head")
+                    
+                    -- Só adiciona se o cara tiver vivo, com root e cabeça
+                    if hum and root and head and hum.Health > 0 then
                         local ok, cf, size = pcall(function() return char:GetBoundingBox() end)
                         local sx, sy = 2, 5
                         if ok and cf and size then sx, sy = size.X, size.Y end
-                        temp[char] = { Player=plr, Hum=hum, Root=root, Head=char:FindFirstChild("Head"), SizeX=sx, SizeY=sy }
+                        temp[char] = { Player=plr, Hum=hum, Root=root, Head=head, SizeX=sx, SizeY=sy }
                     end
                 end
             end
@@ -141,11 +144,7 @@ task.spawn(function()
             end
         end
         local monsters = Workspace:FindFirstChild("Monsters")
-        if monsters then 
-            for _, m in ipairs(monsters:GetChildren()) do 
-                if m:IsA("Model") then add(m) end 
-            end 
-        end
+        if monsters then for _, m in ipairs(monsters:GetChildren()) do if m:IsA("Model") then add(m) end end end
         local mother = Workspace:FindFirstChild("Mother")
         if mother and mother:IsA("Model") then add(mother) end
         CachedWalkers = temp
@@ -165,12 +164,8 @@ task.spawn(function()
                 if ext then
                     local pos
                     local prompt = ext:FindFirstChild("ExtractPrompt", true)
-                    if prompt and prompt.Parent and prompt.Parent:IsA("BasePart") then 
-                        pos = prompt.Parent.Position
-                    else 
-                        local bp = ext:FindFirstChildWhichIsA("BasePart", true)
-                        if bp then pos = bp.Position end 
-                    end
+                    if prompt and prompt.Parent and prompt.Parent:IsA("BasePart") then pos = prompt.Parent.Position
+                    else local bp = ext:FindFirstChildWhichIsA("BasePart", true); if bp then pos = bp.Position end end
                     if pos then temp[exit] = { Name=exit.Name, Pos=pos } end
                 end
             end
@@ -194,19 +189,15 @@ task.spawn(function()
         local folder = Workspace:FindFirstChild("LootBags")
         if folder then for _, bag in ipairs(folder:GetChildren()) do local pos = anyPartPos(bag); if pos then lb[bag] = { Name=bag.Name, Pos=pos } end end end
         CachedLootBags = lb
-
         folder = Workspace:FindFirstChild("Bodies")
         if folder then for _, b in ipairs(folder:GetChildren()) do local pos = anyPartPos(b); if pos then bo[b] = { Name=b.Name, Pos=pos } end end end
         CachedBodies = bo
-
         folder = Workspace:FindFirstChild("WorldFinds")
         if folder then for _, w in ipairs(folder:GetChildren()) do local pos = anyPartPos(w); if pos then wf[w] = { Name=w.Name, Pos=pos } end end end
         CachedWorldFinds = wf
-
         folder = Workspace:FindFirstChild("Watchers")
         if folder then for _, w in ipairs(folder:GetChildren()) do local pos = anyPartPos(w); if pos then wa[w] = { Name=w.Name, Pos=pos } end end end
         CachedWatchers = wa
-
         for _, d in ipairs(Workspace:GetDescendants()) do
             if d:IsA("VehicleSeat") then
                 local model = d
@@ -269,7 +260,7 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- AIMBOT + TRIGGERBOT
+-- AIMBOT BLINDADO (MAGIC SNAP + AUTOFIRE)
 -- ==========================================
 local aimHeld, aimTarget = false, nil
 local lastFire = 0
@@ -283,26 +274,33 @@ end
 
 local function isVisible(targetChar)
     if not Config.Aim.WallCheck then return true end
+    if not targetChar then return false end
+    
+    local head = targetChar:FindFirstChild("Head")
+    if not head then return false end -- Proteção adicionada
+
     local rp = RaycastParams.new()
     rp.FilterDescendantsInstances = { LocalPlayer.Character, targetChar }
     rp.FilterType = Enum.RaycastFilterType.Exclude
-    local hit = Workspace:Raycast(Camera.CFrame.Position, (targetChar.Head.Position - Camera.CFrame.Position), rp)
+    local hit = Workspace:Raycast(Camera.CFrame.Position, (head.Position - Camera.CFrame.Position), rp)
     return hit == nil
 end
 
 local function pickTarget()
     if aimTarget and aimTarget.Player.Character == aimTarget.Root.Parent and aimTarget.Hum.Health > 0 then
         if Config.Aim.TeamCheck and isTeammate(aimTarget.Player) then aimTarget = nil; return nil end
-        if isVisible(aimTarget.Root.Parent) then return aimTarget end
+        if isVisible(aimTarget.Char) then return aimTarget end
     end
     aimTarget = nil
     local center = Camera.ViewportSize * 0.5
     local best, bestD = nil, Config.Aim.FOV
+    
     for _, d in pairs(CachedPlayers) do
-        if d.Hum.Health > 0 and isVisible(d.Root.Parent) then
+        -- Proteção contra personagens morrendo/sem cabeça
+        if d.Hum and d.Hum.Health > 0 and d.Head and d.Char then
             if not (Config.Aim.TeamCheck and isTeammate(d.Player)) then
                 local part = (Config.Aim.Bone == "head" and d.Head) or (Config.Aim.Bone == "chest" and d.Root) or d.Root
-                if part then
+                if part and isVisible(d.Char) then
                     local sp, on = Camera:WorldToViewportPoint(part.Position)
                     if sp.Z > 0 and on then
                         local dist = (Vector2.new(sp.X, sp.Y) - center).Magnitude
@@ -317,7 +315,8 @@ local function pickTarget()
 end
 
 local function aimPointOf(t)
-    local part = (Config.Aim.Bone == "head" and t.Head) or (Config.Aim.Bone == "chest" and t.Root) or t.Head or t.Root
+    if not t.Head then return t.Root.Position end
+    local part = (Config.Aim.Bone == "head" and t.Head) or (Config.Aim.Bone == "chest" and t.Root) or t.Root
     local pos = part.Position
     if Config.Aim.Prediction > 0 then
         local v = t.Root.AssemblyLinearVelocity
@@ -360,31 +359,6 @@ RunService:BindToRenderStep("cobble_aim", Enum.RenderPriority.Camera.Value + 1, 
     if Config.Aim.MagicSnap then
         Camera.CFrame = oldCFrame
     end
-end)
-
--- Silent Aim Hook Fallback
-task.spawn(function()
-    if not LookRemote or not (getrawmetatable and setreadonly) then return end
-    local mt = getrawmetatable(game)
-    setreadonly(mt, false)
-    local old = mt.__namecall
-    mt.__namecall = newcclosure(function(self, ...)
-        local m = getnamecallmethod()
-        if m == "FireServer" and self == LookRemote and alive and Config.Aim.Enabled and (Config.Aim.AlwaysOn or aimHeld) then
-            local t = pickTarget()
-            if t then
-                local dir = aimPointOf(t) - Camera.CFrame.Position
-                if dir.Magnitude > 0.05 then
-                    dir = dir.Unit
-                    local yaw   = math.atan2(-dir.X, -dir.Z)
-                    local pitch = math.asin(math.clamp(dir.Y, -1, 1))
-                    return old(self, yaw, pitch)
-                end
-            end
-        end
-        return old(self, ...)
-    end)
-    setreadonly(mt, true)
 end)
 
 -- ==========================================
@@ -433,7 +407,7 @@ local function updatePlayerESP()
     if Config.ESP.Enabled then
         local camRight = Camera.CFrame.RightVector
         for char, data in pairs(CachedPlayers) do
-            if data.Hum.Health > 0 then
+            if data.Hum.Health > 0 and data.Head then
                 active[char] = true
                 local o = espData[char] or newObj(); espData[char] = o
                 local rp = data.Root.Position
@@ -636,7 +610,7 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- ACTIONS (INCLUINDO O MOVE ITEM)
+-- ACTIONS (TUDO AQUI)
 -- ==========================================
 local stanceSeq = 0
 getgenv().Cobble_Stance = function(state) if StanceRemote then stanceSeq = stanceSeq + 1; StanceRemote:FireServer(state and true or false, stanceSeq) end end
@@ -684,5 +658,5 @@ getgenv().Cobble_Unload = function()
     for _, d in ipairs({hudBg,hudHpBg,hudHpFill,hudHpText,hudWeapon,hudExtract}) do pcall(function() d:Remove() end) end
     restoreFullbright()
     if getgenv().Cobble_UI_Loaded then getgenv().Cobble_UI_Loaded:Destroy() end
-    print("[cobble] HUSH V6.2 Unloaded.")
+    print("[cobble] HUSH V7 Unloaded.")
 end
