@@ -1,4 +1,4 @@
--- cobble hills logic (HUSH V5.1 - ULTIMATE)
+-- cobble hills logic (HUSH V6 - MAGIC BULLET)
 pcall(function() if setthreadidentity then setthreadidentity(8) end end)
 if getgenv().Cobble_Unload then pcall(getgenv().Cobble_Unload) end
 
@@ -40,11 +40,12 @@ local defaults = {
     AutoPickupRadius = 8,
     AutoPickupRate   = 0.7,
     Aim  = {
-        Enabled=true, AlwaysOn=false, Key=Enum.KeyCode.E,
-        FOV=120, Smooth=0.55, ShowFOV=true,
+        Enabled=true, AlwaysOn=false, Key=Enum.UserInputType.MouseButton2,
+        FOV=30, Smooth=0.45, ShowFOV=true,
         Bone="head", Prediction=0.15, WallCheck=true,
         InvertYaw=false, InvertPitch=false, Debug=false,
-        Silent=true, Visual=false, -- MUDADO PARA SILENT PADRÃO
+        Silent=false, Visual=false, 
+        AutoFire=true, FireDelay=0.1, MagicSnap=true -- NOVIDADES DO TRIGGERBOT
     },
     HUD  = { Enabled=true },
 }
@@ -117,7 +118,7 @@ task.spawn(function()
             end
         end
         CachedPlayers = temp
-        task.wait(0.5)
+        task.wait(0.2)
     end
 end)
 
@@ -251,19 +252,14 @@ task.spawn(function()
     track(Workspace.DescendantAdded:Connect(function(d) if d:IsA("ProximityPrompt") then registerPrompt(d) end end))
     while alive do task.wait(3); for p in pairs(LootPrompts) do if not p.Parent or not p:IsDescendantOf(Workspace) then LootPrompts[p] = nil end end end
 end)
-getgenv().Cobble_LootContainers = function()
-    local list = {}
-    for name in pairs(LootContainers) do list[#list+1] = { Name=name, Tier=LOOT_DEFAULT_TIER[name] } end
-    table.sort(list, function(a,b) if a.Tier ~= b.Tier then return a.Tier < b.Tier end; return a.Name < b.Name end)
-    return list
-end
 
 -- ==========================================
--- AIMBOT (SILENT + PREDIÇÃO + WALLCHECK)
+-- AIMBOT + TRIGGERBOT (MAGIC BULLET)
 -- ==========================================
 local aimHeld, aimTarget = false, nil
 local curYaw, curPitch = 0, 0
 local hasAim = false
+local lastFire = 0
 
 local function isAimInput(input)
     local b = Config.Aim.Key
@@ -307,7 +303,6 @@ end
 local function aimPointOf(t)
     local part = (Config.Aim.Bone == "head" and t.Head) or (Config.Aim.Bone == "chest" and t.Root) or t.Head or t.Root
     local pos = part.Position
-    -- PREDIÇÃO DE MOVIMENTO (Conserta o balanço e mira na frente)
     if Config.Aim.Prediction > 0 then
         local v = t.Root.AssemblyLinearVelocity
         if v.Magnitude > 0.5 then pos = pos + v * Config.Aim.Prediction end
@@ -318,18 +313,44 @@ end
 track(UserInputService.InputBegan:Connect(function(i, gpe) if not gpe and isAimInput(i) then aimHeld = true; aimTarget = nil end end))
 track(UserInputService.InputEnded:Connect(function(i) if isAimInput(i) then aimHeld = false; aimTarget = nil; hasAim = false end end))
 
--- VISUAL AIM
+-- A Lógica do Magic Bullet no RenderStep
 RunService:BindToRenderStep("cobble_aim", Enum.RenderPriority.Camera.Value + 1, function(dt)
-    if not Config.Aim.Enabled or not Config.Aim.Visual then return end
+    if not Config.Aim.Enabled then return end
     if not (Config.Aim.AlwaysOn or aimHeld) then return end
+    
     local t = pickTarget()
     if not t then return end
-    local want = CFrame.lookAt(Camera.CFrame.Position, aimPointOf(t))
-    local s = math.clamp(Config.Aim.Smooth, 0.01, 1)
-    Camera.CFrame = Camera.CFrame:Lerp(want, 1 - (1 - s) ^ (dt * 60))
+    
+    local targetPos = aimPointOf(t)
+    local oldCFrame = Camera.CFrame
+
+    -- 1. MAGIC SNAP (Trava a mira invisivelmente na cabeça)
+    if Config.Aim.MagicSnap then
+        Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, targetPos)
+    elseif Config.Aim.Visual then
+        local want = CFrame.lookAt(Camera.CFrame.Position, targetPos)
+        local s = math.clamp(Config.Aim.Smooth, 0.01, 1)
+        Camera.CFrame = Camera.CFrame:Lerp(want, 1 - (1 - s) ^ (dt * 60))
+    end
+
+    -- 2. TRIGGERBOT / AUTO FIRE
+    if Config.Aim.AutoFire and (tick() - lastFire > Config.Aim.FireDelay) then
+        local char = LocalPlayer.Character
+        local tool = char and char:FindFirstChildOfClass("Tool")
+        if tool then
+            lastFire = tick()
+            pcall(function() tool:Activate() end) -- Força o tiro
+            if mouse1click then pcall(mouse1click) end
+        end
+    end
+
+    -- 3. DEVOLVE A CÂMERA (O segredo pra parecer silent)
+    if Config.Aim.MagicSnap then
+        Camera.CFrame = oldCFrame
+    end
 end)
 
--- SILENT AIM HOOK (O Segredo pra não balançar a arma)
+-- Silent Aim via Hook (Fallback)
 task.spawn(function()
     if not LookRemote or not (getrawmetatable and setreadonly) then return end
     local mt = getrawmetatable(game)
@@ -347,17 +368,9 @@ task.spawn(function()
                     local pitch = math.asin(math.clamp(dir.Y, -1, 1))
                     if Config.Aim.InvertYaw   then yaw   = -yaw   end
                     if Config.Aim.InvertPitch then pitch = -pitch end
-                    local s = math.clamp(Config.Aim.Smooth, 0.01, 1)
-                    if not hasAim then curYaw, curPitch = yaw, pitch; hasAim = true
-                    else
-                        local dY = ((yaw - curYaw + math.pi) % (math.pi*2)) - math.pi
-                        curYaw   = curYaw + dY * s
-                        curPitch = curPitch + (pitch - curPitch) * s
-                    end
-                    return old(self, curYaw, curPitch)
+                    return old(self, yaw, pitch)
                 end
             end
-            hasAim = false
         end
         return old(self, ...)
     end)
@@ -366,7 +379,7 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- DRAWINGS E ESP (TUDO DE VOLTA)
+-- DRAWINGS E ESP
 -- ==========================================
 local ESP_KEYS = {"box","hbg","hfill","dot","name","dist","weapon","hb","hbf"}
 local espData = {}
@@ -566,7 +579,7 @@ track(RunService.RenderStepped:Connect(function()
 end))
 
 -- ==========================================
--- UTILS (AUTO PICKUP, BREATH, NV, SILENT WALK)
+-- UTILS
 -- ==========================================
 local lastPickup = 0
 local function tryAutoPickup()
@@ -607,7 +620,7 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- ACTIONS (TODAS AS FUNÇÕES MANUAIS)
+-- ACTIONS
 -- ==========================================
 local stanceSeq = 0
 getgenv().Cobble_Stance = function(state) if StanceRemote then stanceSeq = stanceSeq + 1; StanceRemote:FireServer(state and true or false, stanceSeq) end end
@@ -616,6 +629,7 @@ getgenv().Cobble_Arrest = function() local a = RemotesFolder and RemotesFolder:F
 getgenv().Cobble_Deploy = function() if DeployRemote then DeployRemote:FireServer() end end
 getgenv().Cobble_Replay = function(mode) if ReplayRemote then ReplayRemote:FireServer(mode or "start") end end
 getgenv().Cobble_Equip = function(name) local g = RemotesFolder and RemotesFolder:FindFirstChild("Gun"); if g then g:FireServer("Equip", name) end end
+
 getgenv().Cobble_ForcePickup = function()
     if not LootRemote then return end
     local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -641,7 +655,6 @@ end
 getgenv().Cobble_ForceVault = function() if MoveRemote then MoveRemote:FireServer("vault", Vector3.new(1,0,0), { top = Vector3.new(0,0,0), k = "vault", t = 0.5, a = 0 }) end end
 getgenv().Cobble_PaperMap = function(open) if PaperMapRem then PaperMapRem:FireServer(open and "open" or "close", open and "map" or nil) end end
 getgenv().Cobble_Downed = function(press) if DownedRemote then DownedRemote:FireServer("press", press and true or false) end end
-getgenv().Cobble_MoveItem = function(id, qty) if InvActionRem then InvActionRem:FireServer({ action = "Safe", from = "safe", id = id, qty = qty or 1, to = "backpack" }) end end
 
 getgenv().Cobble_Unload = function()
     alive = false
@@ -654,5 +667,5 @@ getgenv().Cobble_Unload = function()
     for _, d in ipairs({hudBg,hudHpBg,hudHpFill,hudHpText,hudWeapon,hudExtract}) do pcall(function() d:Remove() end) end
     restoreFullbright()
     if getgenv().Cobble_UI_Loaded then getgenv().Cobble_UI_Loaded:Destroy() end
-    print("[cobble] HUSH V5.1 Unloaded.")
+    print("[cobble] HUSH V6 Unloaded.")
 end
