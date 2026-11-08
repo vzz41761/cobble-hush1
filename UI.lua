@@ -1,4 +1,4 @@
--- cobble hills UI (HUSH V7)
+-- cobble hills UI (HUSH V12 - EXACT CLONE)
 local Players = game:GetService("Players")
 local Config = getgenv().CobbleConfig
 if not Config then return end
@@ -19,111 +19,99 @@ pcall(function() S:SetFontFamily("Montserrat") end)
 
 local Window = S:CreateWindow({ 
     Name = "COBBLE <font color='#9D69FF'>HUSH</font>", 
-    Subtitle = "V7 ULTIMATE", 
+    Subtitle = "V12 EXACT CLONE", 
     Icon = "crosshair", Logo = true, 
-    Size = UDim2.fromOffset(500, 420), 
+    Size = UDim2.fromOffset(520, 500), 
     ToggleKey = Enum.KeyCode.Insert, 
     Backdrop = "aurora" 
 })
 
 -- ==========================================
--- ABA 1: AIMBOT & TRIGGERBOT
+-- ABA 1: AIMBOT
 -- ==========================================
 local tabAim = Window:CreateTab({ Name = "AIMBOT", Icon = "crosshair" })
 tabAim:SetColumns(2)
 
 local secAim = tabAim:CreateSection({ Name = "Aimbot Settings" })
-secAim:Toggle({ Name = "Ativar Aimbot", Default = true, Callback = function(v) Config.Aim.Enabled = v end })
-secAim:Toggle({ Name = "Mostrar FOV", Default = true, Callback = function(v) Config.Aim.ShowFOV = v end })
-secAim:Toggle({ Name = "Wall Check (Só Visível)", Default = true, Callback = function(v) Config.Aim.WallCheck = v end })
-secAim:Toggle({ Name = "Team Check (Ignorar Aliados)", Default = true, Callback = function(v) Config.Aim.TeamCheck = v end })
+secAim:Toggle({ Name = "Ativar Aimbot", Default = false, Callback = function(v) Config.Aimbot.Enabled = v end })
+secAim:Toggle({ Name = "Silent Aim (Invisível)", Default = false, Callback = function(v) Config.Aimbot.Silent = v end })
+secAim:Toggle({ Name = "Sempre Ativo (Always On)", Default = false, Callback = function(v) Config.Aimbot.AlwaysOn = v end })
+secAim:Toggle({ Name = "Wall Check", Default = true, Callback = function(v) Config.Aimbot.WallCheck = v end })
+secAim:Toggle({ Name = "Party Check", Default = true, Callback = function(v) Config.Aimbot.PartyCheck = v end })
+secAim:Slider({ Name = "FOV", Min = 5, Max = 400, Default = 180, Decimals = 0, Step = 1, Callback = function(v) Config.Aimbot.FOV = v end })
+secAim:Slider({ Name = "Suavidade", Min = 1, Max = 25, Default = 8, Decimals = 0, Step = 1, Callback = function(v) Config.Aimbot.Smooth = v end })
+secAim:Slider({ Name = "Predição", Min = 0.1, Max = 2.5, Default = 1.0, Decimals = 1, Step = 0.1, Callback = function(v) Config.Aimbot.Prediction = v end })
+secAim:Dropdown({ Name = "Parte do Corpo", Options = {"Head", "Torso", "Nearest"}, Default = "Head", Callback = function(v) Config.Aimbot.TargetPart = v end })
 
-local secTrigger = tabAim:CreateSection({ Name = "Triggerbot (Magic Bullet)" })
-secTrigger:Toggle({ Name = "Magic Snap (Invisível)", Default = true, Callback = function(v) Config.Aim.MagicSnap = v end })
-secTrigger:Toggle({ Name = "Auto-Fire (Atirar Auto)", Default = true, Callback = function(v) Config.Aim.AutoFire = v end })
-secTrigger:Slider({ Name = "Delay do Tiro (s)", Min = 0.05, Max = 0.5, Default = 0.1, Decimals = 2, Step = 0.01, Callback = function(v) Config.Aim.FireDelay = v end })
-secTrigger:Paragraph({ Name = "Como usar", Text = "Mantenha o botão direito (ou E) pressionado." })
-
-local secTuning = tabAim:CreateSection({ Name = "Tuning" })
-secTuning:Slider({ Name = "FOV (Raio)", Min = 5, Max = 400, Default = 60, Decimals = 0, Step = 1, Callback = function(v) Config.Aim.FOV = v end })
-secTuning:Slider({ Name = "Suavidade (Visual)", Min = 0.05, Max = 1.0, Default = 0.45, Decimals = 2, Step = 0.01, Callback = function(v) Config.Aim.Smooth = v end })
-secTuning:Slider({ Name = "Predição (s)", Min = 0.0, Max = 0.4, Default = 0.15, Decimals = 2, Step = 0.01, Callback = function(v) Config.Aim.Prediction = v end })
-secTuning:Dropdown({ Name = "Parte do Corpo", Options = {"head", "chest"}, Default = "head", Callback = function(v) Config.Aim.Bone = v end })
+local secFilter = tabAim:CreateSection({ Name = "Filtros Extras" })
+secFilter:Toggle({ Name = "Car Cabin Aim (Blindados)", Default = true, Callback = function(v) Config.Aimbot.CarCabinAim = v end })
+secFilter:Toggle({ Name = "Mirar em Downed", Default = false, Callback = function(v) Config.Aimbot.AimDowned = v end })
+secFilter:Toggle({ Name = "Ignorar New Raiders (Alt)", Default = true, Callback = function(v) Config.Aimbot.IgnoreNewRaiders = v end })
+secFilter:Toggle({ Name = "Ping Compensation", Default = true, Callback = function(v) Config.Aimbot.PingComp = v end })
 
 -- ==========================================
--- ABA 2: ESP & LOOT
+-- ABA 2: MAIN / UTILS
 -- ==========================================
-local tabEsp = Window:CreateTab({ Name = "ESP & LOOT", Icon = "eye" })
+local tabMain = Window:CreateTab({ Name = "MAIN", Icon = "activity" })
+tabMain:SetColumns(2)
+
+local secUtil = tabMain:CreateSection({ Name = "Utilitários" })
+secUtil:Toggle({ Name = "Fullbright", Default = false, Callback = function(v) Config.Util.Fullbright = v end })
+secUtil:Toggle({ Name = "No Grass", Default = false, Callback = function(v) Config.Util.NoGrass = v end })
+secUtil:Toggle({ Name = "Infinite Stamina", Default = false, Callback = function(v) Config.Util.InfStamina = v end })
+secUtil:Toggle({ Name = "Auto Hold Breath", Default = false, Callback = function(v) Config.Util.AutoHoldBreath = v end })
+secUtil:Toggle({ Name = "Auto Heal", Default = false, Callback = function(v) Config.Util.AutoHeal = v end })
+secUtil:Toggle({ Name = "Insta Interact", Default = false, Callback = function(v) Config.Util.InstaInteract = v end })
+secUtil:Toggle({ Name = "Auto Hijack", Default = false, Callback = function(v) Config.Util.AutoHijack = v end })
+
+local secHeal = tabMain:CreateSection({ Name = "Auto Heal Config" })
+secHeal:Dropdown({ Name = "Prioridade de Cura", Options = {"Medkit", "Bandage", "Kit"}, Default = "Medkit", Callback = function(v) Config.Util.HealPriority = v end })
+secHeal:Slider({ Name = "Threshold (%)", Min = 10, Max = 90, Default = 75, Decimals = 0, Step = 5, Callback = function(v) Config.Util.HealThreshold = v end })
+
+local secMods = tabMain:CreateSection({ Name = "Weapon Mods" })
+secMods:Toggle({ Name = "No Recoil", Default = false, Callback = function(v) Config.Util.NoRecoil = v end })
+secMods:Toggle({ Name = "No Spread", Default = false, Callback = function(v) Config.Util.NoSpread = v end })
+
+-- ==========================================
+-- ABA 3: ESP
+-- ==========================================
+local tabEsp = Window:CreateTab({ Name = "ESP", Icon = "eye" })
 tabEsp:SetColumns(2)
 
-local secEspP = tabEsp:CreateSection({ Name = "Jogadores & Walkers" })
-secEspP:Toggle({ Name = "ESP Jogadores", Default = true, Callback = function(v) Config.ESP.Enabled = v end })
-secEspP:Toggle({ Name = "Chams (Highlight)", Default = true, Callback = function(v) Config.ESP.Chams = v end })
-secEspP:Toggle({ Name = "Arma na Mão", Default = true, Callback = function(v) Config.ESP.Weapon = v end })
-secEspP:Toggle({ Name = "Walker ESP", Default = true, Callback = function(v) Config.ESP.Walker.Enabled = v end })
-secEspP:Toggle({ Name = "Walker Health", Default = true, Callback = function(v) Config.ESP.Walker.Health = v end })
+local secEspP = tabEsp:CreateSection({ Name = "Jogadores" })
+secEspP:Toggle({ Name = "Players ESP", Default = false, Callback = function(v) Config.ESP.Players.Enabled = v end })
+secEspP:Toggle({ Name = "Nome", Default = true, Callback = function(v) Config.ESP.Players.Name = v end })
+secEspP:Toggle({ Name = "Distância", Default = true, Callback = function(v) Config.ESP.Players.Distance = v end })
+secEspP:Toggle({ Name = "Hide Teammates", Default = false, Callback = function(v) Config.ESP.Players.HideTeammates = v end })
+secEspP:Slider({ Name = "Distância Max", Min = 100, Max = 3000, Default = 2000, Decimals = 0, Step = 100, Callback = function(v) Config.ESP.Players.MaxDist = v end })
 
-local secEspW = tabEsp:CreateSection({ Name = "Mundo & Extração" })
-secEspW:Toggle({ Name = "Extração (Exits)", Default = true, Callback = function(v) Config.ESP.Extraction.Enabled = v end })
-secEspW:Toggle({ Name = "Veículos", Default = true, Callback = function(v) Config.ESP.Vehicle.Enabled = v end })
-secEspW:Toggle({ Name = "Sacos de Loot (Bags)", Default = true, Callback = function(v) Config.ESP.LootBag.Enabled = v end })
-secEspW:Toggle({ Name = "World Finds", Default = true, Callback = function(v) Config.ESP.WorldFind.Enabled = v end })
-secEspW:Toggle({ Name = "Corpos (Bodies)", Default = false, Callback = function(v) Config.ESP.Body.Enabled = v end })
+local secEspW = tabEsp:CreateSection({ Name = "Mundo" })
+secEspW:Toggle({ Name = "Loot Bags", Default = false, Callback = function(v) Config.ESP.LootBags.Enabled = v end })
+secEspW:Toggle({ Name = "Airdrops", Default = false, Callback = function(v) Config.ESP.Airdrops.Enabled = v end })
+secEspW:Toggle({ Name = "Containers", Default = false, Callback = function(v) Config.ESP.Containers.Enabled = v end })
+secEspW:Toggle({ Name = "Safes", Default = false, Callback = function(v) Config.ESP.Safes.Enabled = v end })
+secEspW:Toggle({ Name = "Items Soltos", Default = false, Callback = function(v) Config.ESP.Items.Enabled = v end })
+secEspW:Toggle({ Name = "Eventos (Frag/Heli)", Default = false, Callback = function(v) Config.ESP.Events.Enabled = v end })
 
-local secLoot = tabEsp:CreateSection({ Name = "Containers (Loot)" })
-secLoot:Toggle({ Name = "Loot ESP", Default = true, Callback = function(v) Config.Loot.Enabled = v end })
-secLoot:Slider({ Name = "Alcance (m)", Min = 50, Max = 500, Default = 150, Decimals = 0, Step = 10, Callback = function(v) Config.Loot.MaxDist = v end })
-secLoot:Toggle({ Name = "Tier 0 (Armas)", Default = true, Callback = function(v) Config.Loot.TierEnabled[0] = v end })
-secLoot:Toggle({ Name = "Tier 1 (Médico/Tools)", Default = true, Callback = function(v) Config.Loot.TierEnabled[1] = v end })
-secLoot:Toggle({ Name = "Tier 2 (Mobília)", Default = true, Callback = function(v) Config.Loot.TierEnabled[2] = v end })
-
--- ==========================================
--- ABA 3: UTILS E AMBIENTE
--- ==========================================
-local tabUtils = Window:CreateTab({ Name = "UTILS", Icon = "settings" })
-tabUtils:SetColumns(2)
-
-local secUtil = tabUtils:CreateSection({ Name = "Movimento & Visão" })
-secUtil:Toggle({ Name = "Fullbright (Tirar Escuro)", Default = false, Callback = function(v) Config.Util.Fullbright = v end })
-secUtil:Toggle({ Name = "Night Vision", Default = false, Callback = function(v) Config.Util.NightVision = v end })
-secUtil:Toggle({ Name = "Silent Walk (Passo Mudo)", Default = true, Callback = function(v) Config.Util.SilentWalk = v end })
-secUtil:Toggle({ Name = "Prender Respiração", Default = false, Callback = function(v) Config.Util.Breath = v end })
-
-local secAuto = tabUtils:CreateSection({ Name = "Auto-Pickup (Farm)" })
-secAuto:Toggle({ Name = "Auto Pegar Loot", Default = false, Callback = function(v) Config.Util.AutoPickup = v end })
-secAuto:Slider({ Name = "Raio de Coleta (m)", Min = 2, Max = 20, Default = 8, Decimals = 0, Step = 1, Callback = function(v) Config.AutoPickupRadius = v end })
-
-local secHUD = tabUtils:CreateSection({ Name = "Interface (HUD)" })
-secHUD:Toggle({ Name = "Ligar HUD", Default = true, Callback = function(v) Config.HUD.Enabled = v end })
+local secEspDetail = tabEsp:CreateSection({ Name = "Detalhes do Loot" })
+secEspDetail:Toggle({ Name = "Loot Names", Default = true, Callback = function(v) 
+    Config.ESP.LootBags.Name = v; Config.ESP.Airdrops.Name = v; Config.ESP.Containers.Name = v; Config.ESP.Safes.Name = v; Config.ESP.Items.Name = v
+end })
+secEspDetail:Toggle({ Name = "Loot Distance", Default = true, Callback = function(v) 
+    Config.ESP.LootBags.Distance = v; Config.ESP.Airdrops.Distance = v; Config.ESP.Containers.Distance = v; Config.ESP.Safes.Distance = v; Config.ESP.Items.Distance = v
+end })
+secEspDetail:Toggle({ Name = "Hide Opened (Só Vazio)", Default = true, Callback = function(v) 
+    Config.ESP.LootBags.HideOpened = v; Config.ESP.Airdrops.HideOpened = v; Config.ESP.Containers.HideOpened = v; Config.ESP.Safes.HideOpened = v
+end })
 
 -- ==========================================
--- ABA 4: AÇÕES MANUAIS (REMOTES)
--- ==========================================
-local tabActions = Window:CreateTab({ Name = "AÇÕES", Icon = "zap" })
-tabActions:SetColumns(2)
-
-local secAct1 = tabActions:CreateSection({ Name = "Ações do Jogo" })
-secAct1:Button({ Name = "Deploy / Respawn", Callback = function() if getgenv().Cobble_Deploy then getgenv().Cobble_Deploy() end end })
-secAct1:Button({ Name = "Flashlight", Callback = function() if getgenv().Cobble_Flashlight then getgenv().Cobble_Flashlight() end end })
-secAct1:Button({ Name = "Toggle Stance", Callback = function() if getgenv().Cobble_Stance then getgenv().Cobble_Stance(true) end end })
-secAct1:Button({ Name = "Arrest (Surrender)", Callback = function() if getgenv().Cobble_Arrest then getgenv().Cobble_Arrest() end end })
-
-local secAct2 = tabActions:CreateSection({ Name = "Forçar Ações (Bypass)" })
-secAct2:Button({ Name = "Force Loot (takeAll)", Callback = function() if getgenv().Cobble_ForcePickup then getgenv().Cobble_ForcePickup() end end })
-secAct2:Button({ Name = "Force Door (Abrir)", Callback = function() if getgenv().Cobble_ForceDoor then getgenv().Cobble_ForceDoor() end end })
-secAct2:Button({ Name = "Force Vault (Pular)", Callback = function() if getgenv().Cobble_ForceVault then getgenv().Cobble_ForceVault(1,0,0) end end })
-
-local secAct3 = tabActions:CreateSection({ Name = "Remotes Específicos" })
-secAct3:Button({ Name = "Paper Map (Abrir)", Callback = function() if getgenv().Cobble_PaperMap then getgenv().Cobble_PaperMap(true) end end })
-secAct3:Button({ Name = "Downed (Press)", Callback = function() if getgenv().Cobble_Downed then getgenv().Cobble_Downed(true) end end })
-secAct3:Button({ Name = "Equip Sledgehammer", Callback = function() if getgenv().Cobble_Equip then getgenv().Cobble_Equip("sledgehammer") end end })
-
--- ==========================================
--- ABA 5: CONFIG
+-- ABA 4: CONFIG
 -- ==========================================
 local tabConfig = Window:CreateTab({ Name = "CONFIG", Icon = "wrench" })
 tabConfig:SetColumns(1)
-tabConfig:CreateSection({ Name = "Sessão" }):Button({ Name = "UNLOAD SCRIPT", Icon = "trash-2", Callback = function()
+
+local secSess = tabConfig:CreateSection({ Name = "Sessão" })
+secSess:Button({ Name = "UNLOAD SCRIPT", Icon = "trash-2", Callback = function()
     if getgenv().Cobble_Unload then getgenv().Cobble_Unload() end
     Window:Destroy(); S:Destroy(); S.Cleanup()
 end })
