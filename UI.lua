@@ -1,4 +1,4 @@
--- cobble hills UI (HUSH V6.2)
+-- cobble hills UI (HUSH V7)
 local Players = game:GetService("Players")
 local Config = getgenv().CobbleConfig
 if not Config then return end
@@ -19,7 +19,7 @@ pcall(function() S:SetFontFamily("Montserrat") end)
 
 local Window = S:CreateWindow({ 
     Name = "COBBLE <font color='#9D69FF'>HUSH</font>", 
-    Subtitle = "V6.2 ULTIMATE", 
+    Subtitle = "V7 ULTIMATE", 
     Icon = "crosshair", Logo = true, 
     Size = UDim2.fromOffset(500, 420), 
     ToggleKey = Enum.KeyCode.Insert, 
@@ -34,8 +34,6 @@ tabAim:SetColumns(2)
 
 local secAim = tabAim:CreateSection({ Name = "Aimbot Settings" })
 secAim:Toggle({ Name = "Ativar Aimbot", Default = true, Callback = function(v) Config.Aim.Enabled = v end })
-secAim:Toggle({ Name = "Silent Aim (Hook)", Default = false, Callback = function(v) Config.Aim.Silent = v end })
-secAim:Toggle({ Name = "Visual Aim (Camera)", Default = false, Callback = function(v) Config.Aim.Visual = v end })
 secAim:Toggle({ Name = "Mostrar FOV", Default = true, Callback = function(v) Config.Aim.ShowFOV = v end })
 secAim:Toggle({ Name = "Wall Check (Só Visível)", Default = true, Callback = function(v) Config.Aim.WallCheck = v end })
 secAim:Toggle({ Name = "Team Check (Ignorar Aliados)", Default = true, Callback = function(v) Config.Aim.TeamCheck = v end })
@@ -44,7 +42,7 @@ local secTrigger = tabAim:CreateSection({ Name = "Triggerbot (Magic Bullet)" })
 secTrigger:Toggle({ Name = "Magic Snap (Invisível)", Default = true, Callback = function(v) Config.Aim.MagicSnap = v end })
 secTrigger:Toggle({ Name = "Auto-Fire (Atirar Auto)", Default = true, Callback = function(v) Config.Aim.AutoFire = v end })
 secTrigger:Slider({ Name = "Delay do Tiro (s)", Min = 0.05, Max = 0.5, Default = 0.1, Decimals = 2, Step = 0.01, Callback = function(v) Config.Aim.FireDelay = v end })
-secTrigger:Paragraph({ Name = "Como usar", Text = "Mantenha o botão direito (ou E) pressionado. O script mira e atira sozinho." })
+secTrigger:Paragraph({ Name = "Como usar", Text = "Mantenha o botão direito (ou E) pressionado." })
 
 local secTuning = tabAim:CreateSection({ Name = "Tuning" })
 secTuning:Slider({ Name = "FOV (Raio)", Min = 5, Max = 400, Default = 60, Decimals = 0, Step = 1, Callback = function(v) Config.Aim.FOV = v end })
