@@ -1,637 +1,373 @@
--- cobble hills logic (HUSH V14 - IRONCLAD)
+-- cobble hills logic (HUSH CLEAN REWRITE)
 pcall(function() if setthreadidentity then setthreadidentity(8) end end)
 if getgenv().Cobble_Unload then pcall(getgenv().Cobble_Unload) end
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
-local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 local CoreGui = game:GetService("CoreGui")
+local VirtualUser = game:GetService("VirtualUser")
 
 local LP = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
+local CAM = Workspace.CurrentCamera
+local GETHUI = (gethui and gethui()) or CoreGui
 
--- CONFIG (BLINDADO)
+--== CONFIG (Exato do script) ==--
 local Config = getgenv().CobbleConfig or {}
-if type(Config.Aimbot) ~= "table" then Config.Aimbot = {} end
-Config.Aimbot.Enabled = Config.Aimbot.Enabled ~= false
-Config.Aimbot.Silent = Config.Aimbot.Silent ~= false
-Config.Aimbot.Key = Config.Aimbot.Key or Enum.UserInputType.MouseButton2
-Config.Aimbot.FOV = Config.Aimbot.FOV or 120
-Config.Aimbot.Smooth = Config.Aimbot.Smooth or 0.35
-Config.Aimbot.Prediction = Config.Aimbot.Prediction or 0.15
-Config.Aimbot.WallCheck = Config.Aimbot.WallCheck ~= false
-Config.Aimbot.PartyCheck = Config.Aimbot.PartyCheck ~= false
-Config.Aimbot.CarCabinAim = Config.Aimbot.CarCabinAim ~= false
-
-if type(Config.ESP) ~= "table" then Config.ESP = {} end
-Config.ESP.Players = Config.ESP.Players ~= false
-Config.ESP.Walkers = Config.ESP.Walkers ~= false
-Config.ESP.MaxDist = Config.ESP.MaxDist or 1000
-
-if type(Config.Util) ~= "table" then Config.Util = {} end
-Config.Util.Fullbright = Config.Util.Fullbright == true
-Config.Util.NoGrass = Config.Util.NoGrass == true
-Config.Util.InfStamina = Config.Util.InfStamina == true
-Config.Util.NoSpread = Config.Util.NoSpread == true
-Config.Util.NoRecoil = Config.Util.NoRecoil == true
+Config.Aim = Config.Aim or {
+    Enabled = false, Key = Enum.UserInputType.MouseButton2, FOV = 180, Smooth = 8,
+    AimPart = "Head", Predict = true, PredictScale = 1.0, PingComp = true,
+    GravityComp = false, VisibleOnly = true, TeamCheck = true, Trigger = false,
+    TriggerDelay = 50, FOVCircle = true,
+}
+Config.ESP = Config.ESP or {
+    Players = {Enabled = false, Names = true, Health = true, Distance = true, Range = 2000, Color = Color3.fromRGB(255, 80, 80)},
+    Walkers = {Enabled = true, Names = true, Health = true, Range = 2500, Color = Color3.fromRGB(255, 50, 50)},
+    Loot = {Enabled = false, Range = 1500, Color = Color3.fromRGB(255, 200, 60)},
+    Extract = {Enabled = true, Range = 2500, Color = Color3.fromRGB(0, 255, 150)},
+}
+Config.Modules = Config.Modules or {
+    NoBreath = false, NoRecoil = false, NoSpread = false, NoCameraShake = false,
+}
+Config.Misc = Config.Misc or {
+    AntiAFK = true, AutoHeal = false, AutoHealAt = 75, HideFromAC = false, PanicKey = Enum.KeyCode.RightShift,
+}
 getgenv().CobbleConfig = Config
 
-local connections = {}
-local alive = true
-local function track(c) connections[#connections+1] = c; return c end
+--== RUNTIME STATE ==--
+local Runtime = {
+    aimActive = false, target = nil, triggerActive = false, lastTrigger = 0,
+    velocityCache = setmetatable({}, {__mode = "k"}),
+    espHighlights = {}, espBillboards = {},
+    rayParams = RaycastParams.new(), ignoreList = {},
+    lastFilterRefresh = 0, modulePatches = {},
+    fovCircle = nil, connections = {}, unloaded = false,
+}
+Runtime.rayParams.FilterType = Enum.RaycastFilterType.Exclude
+Runtime.rayParams.IgnoreWater = true
 
-local function isTeammate(plr)
-    if not plr then return false end
-    local myP, theirP = LP:GetAttribute("Party"), plr:GetAttribute("Party")
-    if myP and theirP and myP == theirP then return true end
-    return LP.Team and plr.Team == LP.Team
-end
+if not LP then warn("[Pressure] no LocalPlayer"); return end
+if getgenv().HushCheat then pcall(function() getgenv().HushCheat.Unload() end) end
 
-local CachedPlayers, CachedWalkers = {}, {}
-local espFolder = Instance.new("Folder", gethui and gethui() or CoreGui)
-espFolder.Name = "CobbleESP_Guis"
-
-local function getTargetPos(t)
-    if not t or not t.Root then return nil end
-    local pos = (t.Head and t.Head.Position) or t.Root.Position
-    if Config.Aimbot.CarCabinAim and t.Hum and t.Hum.SeatPart then 
-        pos = t.Hum.SeatPart.Position + Vector3.new(0, 1.5, 0) 
-    end
-    if Config.Aimbot.Prediction > 0 and t.Root.AssemblyLinearVelocity then
-        local v = t.Root.AssemblyLinearVelocity
-        if v.Magnitude > 0.5 then pos = pos + (v * Config.Aimbot.Prediction) end
-    end
-    return pos
-end
-
-local function isVisible(targetChar)
-    if not Config.Aimbot.WallCheck then return true end
-    if not targetChar or not targetChar:FindFirstChild("Head") then return false end
-    local rp = RaycastParams.new()
-    rp.FilterDescendantsInstances = { LP.Character, targetChar }
-    rp.FilterType = Enum.RaycastFilterType.Exclude
-    local hit = Workspace:Raycast(Camera.CFrame.Position, (targetChar.Head.Position - Camera.CFrame.Position), rp)
-    return hit == nil
-end
-
-task.spawn(function()
-    while alive do
-        local pTemp, wTemp = {}, {}
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= LP and plr.Character then
-                local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-                local root = plr.Character:FindFirstChild("HumanoidRootPart")
-                local head = plr.Character:FindFirstChild("Head")
-                if hum and root and head and hum.Health > 0 then
-                    pTemp[plr] = { Char=plr.Character, Hum=hum, Root=root, Head=head, Plr=plr }
-                end
-            end
+--== FILTROS ==--
+local function getIgnoreList()
+    local list = {LP.Character}
+    for _, child in ipairs(Workspace:GetChildren()) do
+        local n = child.Name
+        if n == "Monsters" or n == "Town" or n == "Terrain" then
+            table.insert(list, child)
         end
-        CachedPlayers = pTemp
-
-        local monsters = Workspace:FindFirstChild("Monsters")
-        if monsters then
-            for _, m in ipairs(monsters:GetChildren()) do
-                local hum, root = m:FindFirstChildOfClass("Humanoid"), m:FindFirstChild("HumanoidRootPart")
-                if hum and root and hum.Health > 0 then wTemp[m] = { Hum=hum, Root=root, Name=m.Name } end
-            end
-        end
-        CachedWalkers = wTemp
-        task.wait(0.5)
     end
-end)
+    return list
+end
 
-local aimHeld = false
-track(UserInputService.InputBegan:Connect(function(i, gpe) 
-    if not gpe and (i.UserInputType == Config.Aimbot.Key) then aimHeld = true end 
-end))
-track(UserInputService.InputEnded:Connect(function(i) 
-    if i.UserInputType == Config.Aimbot.Key then aimHeld = false end 
-end))
+local function refreshFilters()
+    local now = tick()
+    if now - Runtime.lastFilterRefresh < 1.0 then return end
+    Runtime.lastFilterRefresh = now
+    Runtime.rayParams.FilterDescendantsInstances = getIgnoreList()
+end
+
+--== MATH E TARGETING ==--
+local function getAimPart(character)
+    if not character then return nil end
+    if Config.Aim.AimPart == "Head" then return character:FindFirstChild("Head") end
+    return character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso") or character:FindFirstChild("HumanoidRootPart")
+end
+
+local function worldToScreen(pos)
+    local sp, onScreen = CAM:WorldToViewportPoint(pos)
+    if not onScreen or sp.Z <= 0 then return nil end
+    return Vector2.new(sp.X, sp.Y)
+end
+
+local function getVelocity(target)
+    local cached = Runtime.velocityCache[target]
+    local now = tick()
+    if not cached then
+        Runtime.velocityCache[target] = {pos = target.Position, t = now, vel = Vector3.zero}
+        return Vector3.zero
+    end
+    local dt = now - cached.t
+    if dt > 0.005 and dt < 0.3 then
+        local inst = (target.Position - cached.pos) / dt
+        if inst.Magnitude > 0.5 then
+            if cached.vel.Magnitude > 0.5 then cached.vel = inst * 0.7 + cached.vel * 0.3
+            else cached.vel = inst end
+        end
+        cached.pos = target.Position
+        cached.t = now
+    end
+    if now - cached.t > 3 then Runtime.velocityCache[target] = nil end
+    return cached.vel
+end
+
+local function isTeammate(player)
+    if player == LP then return true end
+    if LP.Team and player.Team and LP.Team == player.Team then return true end
+    return false
+end
+
+local function canSee(targetPart)
+    if not Config.Aim.VisibleOnly then return true end
+    refreshFilters()
+    local origin = CAM.CFrame.Position
+    local dir = targetPart.Position - origin
+    if dir.Magnitude < 0.5 then return true end
+    local ray = Workspace:Raycast(origin, dir, Runtime.rayParams)
+    if not ray then return true end
+    if ray.Instance == targetPart or targetPart:IsDescendantOf(ray.Instance) then return true end
+    return false
+end
 
 local function pickTarget()
-    local center = Camera.ViewportSize * 0.5
-    local best, bestD = nil, Config.Aimbot.FOV
-    for _, d in pairs(CachedPlayers) do
-        if not (Config.Aimbot.PartyCheck and isTeammate(d.Plr)) and isVisible(d.Char) then
-            local targetPos = getTargetPos(d)
-            if targetPos then
-                local sp, on = Camera:WorldToViewportPoint(targetPos)
-                if sp.Z > 0 and on and (Vector2.new(sp.X, sp.Y) - center).Magnitude < bestD then
-                    bestD = (Vector2.new(sp.X, sp.Y) - center).Magnitude
-                    best = d
-                end
-            end
+    local center = Vector2.new(CAM.ViewportSize.X / 2, CAM.ViewportSize.Y / 2)
+    local best = nil
+    local bestScore = math.huge
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LP then continue end
+        if Config.Aim.TeamCheck and isTeammate(player) then continue end
+        local char = player.Character
+        if not char then continue end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 then continue end
+        local part = getAimPart(char)
+        if not part then continue end
+        local screen = worldToScreen(part.Position)
+        if not screen then continue end
+        local screenDist = (screen - center).Magnitude
+        if screenDist > Config.Aim.FOV then continue end
+        if not canSee(part) then continue end
+        local worldDist = (part.Position - CAM.CFrame.Position).Magnitude
+        local score = screenDist * 0.7 + worldDist * 0.003
+        if score < bestScore then
+            bestScore = score
+            best = {player = player, part = part, screen = screen, worldDist = worldDist}
         end
     end
     return best
 end
 
-local oldIndex, oldNamecall
-local mt = getrawmetatable(game)
-local wrap = newcclosure or function(f) return f end
-setreadonly(mt, false)
-oldIndex = mt.__index
-oldNamecall = mt.__namecall
+local function predictPosition(targetPart, playerChar)
+    local camPos = CAM.CFrame.Position
+    local pos = targetPart.Position
+    if not Config.Aim.Predict then return pos end
 
-mt.__index = wrap(function(self, key)
-    if aimHeld and Config.Aimbot.Enabled and Config.Aimbot.Silent and self == LP:GetMouse() then
-        local target = pickTarget()
-        if target then
-            if key == "Hit" then return CFrame.new(getTargetPos(target)) end
-            if key == "Target" then return target.Head end
-        end
+    local dist = (pos - camPos).Magnitude
+    local speed = 2000
+    local t = dist / speed
+
+    local vel = Vector3.zero
+    if playerChar and playerChar.PrimaryPart then vel = getVelocity(playerChar.PrimaryPart) end
+    local lead = vel * t * Config.Aim.PredictScale
+
+    local drop = Vector3.zero
+    if Config.Aim.GravityComp then
+        local g = Workspace.Gravity
+        drop = Vector3.new(0, 0.5 * g * t * t, 0)
     end
-    return oldIndex(self, key)
-end)
 
-mt.__namecall = wrap(function(self, ...)
-    local method = getnamecallmethod()
-    local args = {...}
-    
-    if method == "Raycast" and Config.Util.NoSpread and typeof(args[1]) == "Vector3" and typeof(args[2]) == "Vector3" then
-        local target = pickTarget()
-        local dir
-        if target then
-            dir = (getTargetPos(target) - args[1]).Unit
-        else
-            dir = Camera.CFrame.LookVector
-        end
-        args[2] = dir * args[2].Magnitude
-        return oldNamecall(self, table.unpack(args))
+    if Config.Aim.PingComp then
+        local ping = 0
+        pcall(function() ping = LP:GetNetworkPing() end)
+        lead = lead + vel * (ping * 0.5) * Config.Aim.PredictScale
     end
-    
-    return oldNamecall(self, ...)
-end)
-setreadonly(mt, true)
+    return pos + lead + drop
+end
 
-RunService:BindToRenderStep("cobble_visual", Enum.RenderPriority.Camera.Value + 1, function(dt)
-    if not Config.Aimbot.Enabled or Config.Aimbot.Silent or not aimHeld then return end
+local function applyAim(target, dt)
+    local camPos = CAM.CFrame.Position
+    local aimPos = predictPosition(target.part, target.player.Character)
+    local newCF = CFrame.lookAt(camPos, aimPos)
+    local alpha = math.clamp(dt * Config.Aim.Smooth * 1.5, 0.02, 0.9)
+    CAM.CFrame = CAM.CFrame:Lerp(newCF, alpha)
+end
+
+local function doTrigger(target, now)
+    if not Config.Aim.Trigger then return end
+    if now - Runtime.lastTrigger < Config.Aim.TriggerDelay / 1000 then return end
+    local dir = (target.part.Position - CAM.CFrame.Position).Unit
+    if CAM.CFrame.LookVector:Dot(dir) >= 0.9994 then
+        Runtime.lastTrigger = now
+        pcall(function()
+            if mouse1click then mouse1click()
+            elseif VirtualUser then
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton1(Vector2.zero)
+            end
+        end)
+    end
+end
+
+--== LOOP DO AIMBOT ==--
+if Drawing then
+    Runtime.fovCircle = Drawing.new("Circle")
+    Runtime.fovCircle.Visible = false
+    Runtime.fovCircle.Thickness = 1
+    Runtime.fovCircle.NumSides = 60
+    Runtime.fovCircle.Color = Color3.fromRGB(0, 185, 255)
+    Runtime.fovCircle.Transparency = 0.6
+    Runtime.fovCircle.Filled = false
+end
+
+table.insert(Runtime.connections, RunService.RenderStepped:Connect(function(dt)
+    if Runtime.unloaded or not Config.Aim.Enabled then
+        if Runtime.fovCircle then Runtime.fovCircle.Visible = false end
+        return
+    end
     local target = pickTarget()
-    if target then
-        local targetPos = getTargetPos(target)
-        if targetPos then
-            local want = CFrame.lookAt(Camera.CFrame.Position, targetPos)
-            Camera.CFrame = Camera.CFrame:Lerp(want, math.clamp(Config.Aimbot.Smooth, 0.01, 1))
+    Runtime.target = target
+
+    if Runtime.fovCircle then
+        Runtime.fovCircle.Visible = Config.Aim.FOVCircle
+        Runtime.fovCircle.Radius = Config.Aim.FOV
+        local vs = CAM.ViewportSize
+        Runtime.fovCircle.Position = Vector2.new(vs.X / 2, vs.Y / 2)
+    end
+
+    if not target then return end
+    applyAim(target, dt)
+    doTrigger(target, tick())
+end))
+
+--== ESP LOOP (HUSH MAP) ==--
+local function clearESP(instance)
+    if Runtime.espHighlights[instance] then pcall(function() Runtime.espHighlights[instance]:Destroy() end); Runtime.espHighlights[instance] = nil end
+    if Runtime.espBillboards[instance] then pcall(function() Runtime.espBillboards[instance]:Destroy() end); Runtime.espBillboards[instance] = nil end
+end
+
+local function setESP(instance, label, color, distance)
+    if not instance or not instance.Parent then return end
+    local hl = Runtime.espHighlights[instance]
+    if not hl then
+        hl = Instance.new("Highlight")
+        hl.Adornee = instance; hl.Name = "CobbleESP"; hl.FillTransparency = 0.6; hl.OutlineTransparency = 0.1
+        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop; hl.Parent = GETHUI
+        Runtime.espHighlights[instance] = hl
+    end
+    hl.FillColor = color; hl.OutlineColor = color
+
+    local bb = Runtime.espBillboards[instance]
+    if not bb then
+        bb = Instance.new("BillboardGui")
+        bb.Size = UDim2.fromOffset(180, 44); bb.StudsOffset = Vector3.new(0, 3, 0)
+        bb.AlwaysOnTop = true; bb.Adornee = instance; bb.Parent = GETHUI
+        local label_ui = Instance.new("TextLabel")
+        label_ui.Size = UDim2.fromScale(1, 1); label_ui.BackgroundTransparency = 1
+        label_ui.Font = Enum.Font.GothamBold; label_ui.TextSize = 13; label_ui.TextStrokeTransparency = 0.4
+        label_ui.TextColor3 = color; label_ui.TextStrokeColor3 = Color3.new(0,0,0); label_ui.Parent = bb
+        Runtime.espBillboards[instance] = bb
+    end
+    local distanceStr = distance and string.format(" [%dm]", math.floor(distance)) or ""
+    bb:FindFirstChildOfClass("TextLabel").Text = tostring(label) .. distanceStr
+end
+
+local espTick = 0
+table.insert(Runtime.connections, RunService.Heartbeat:Connect(function(dt)
+    if Runtime.unloaded then return end
+    espTick = espTick + dt
+    if espTick < 0.2 then return end
+    espTick = 0
+
+    -- Players
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LP then continue end
+        local char = player.Character
+        if not char then continue end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if hum and root and hum.Health > 0 and Config.ESP.Players.Enabled then
+            local dist = (root.Position - CAM.CFrame.Position).Magnitude
+            if dist <= Config.ESP.Players.Range then
+                local color = isTeammate(player) and Color3.fromRGB(60, 210, 120) or Config.ESP.Players.Color
+                local part = getAimPart(char) or root
+                local label = Config.ESP.Players.Health and string.format("HP: %d | %s", math.floor(hum.Health), player.Name) or player.Name
+                setESP(part, label, color, Config.ESP.Players.Distance and dist or nil)
+            else clearESP(root) end
+        elseif root then clearESP(root) end
+    end
+
+    -- Walkers (Monsters)
+    local monsters = Workspace:FindFirstChild("Monsters")
+    if monsters and Config.ESP.Walkers.Enabled then
+        for _, m in ipairs(monsters:GetChildren()) do
+            local root = m:FindFirstChild("HumanoidRootPart")
+            local hum = m:FindFirstChildOfClass("Humanoid")
+            if root and hum and hum.Health > 0 then
+                local dist = (root.Position - CAM.CFrame.Position).Magnitude
+                if dist <= Config.ESP.Walkers.Range then
+                    local label = Config.ESP.Walkers.Health and string.format("%s [HP: %d]", m.Name, math.floor(hum.Health)) or m.Name
+                    setESP(root, label, Config.ESP.Walkers.Color, dist)
+                else clearESP(root) end
+            end
         end
     end
-end)
 
-task.spawn(function()
-    local Weapons = ReplicatedStorage:WaitForChild("Weapons", 10)
-    local GunTuning = Weapons and Weapons:WaitForChild("GunTuning", 10)
+    -- Extract (Exits)
+    local town = Workspace:FindFirstChild("Town")
+    local exits = town and town:FindFirstChild("Exits")
+    if exits and Config.ESP.Extract.Enabled then
+        for _, exit in ipairs(exits:GetChildren()) do
+            local ext = exit:FindFirstChild("Extraction")
+            if ext then
+                local prompt = ext:FindFirstChild("ExtractPrompt", true)
+                local part = prompt and prompt.Parent
+                if part then
+                    local dist = (part.Position - CAM.CFrame.Position).Magnitude
+                    if dist <= Config.ESP.Extract.Range then
+                        setESP(part, "EXIT: " .. exit.Name, Config.ESP.Extract.Color, dist)
+                    else clearESP(part) end
+                end
+            end
+        end
+    end
+end))
+
+--== MODULE PATCHING ==--
+local function patchConfigField(module, fieldName, value)
+    if type(module) ~= "table" then return false end
+    local found = false
+    local function search(t, depth)
+        if depth > 4 or type(t) ~= "table" then return end
+        for k, v in pairs(t) do
+            if k == fieldName then t[k] = value; found = true
+            elseif type(v) == "table" then search(v, depth + 1) end
+        end
+    end
+    search(module, 0)
+    return found
+end
+
+local function applyModulePatches()
+    local Weapons = ReplicatedStorage:FindFirstChild("Weapons")
+    local GunTuning = Weapons and Weapons:FindFirstChild("GunTuning")
     if GunTuning then
-        local tuning = require(GunTuning)
-        track(RunService.Heartbeat:Connect(function()
-            if Config.Util.NoRecoil then pcall(function() tuning.SetRecoil(0) end) end
-        end))
-    end
-end)
-
-track(RunService.Heartbeat:Connect(function()
-    local char = LP.Character
-    if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    
-    if Config.Util.Fullbright then
-        Lighting.Brightness = 3; Lighting.ClockTime = 14; Lighting.FogEnd = 1e5
-        Lighting.Ambient = Color3.new(1,1,1); Lighting.OutdoorAmbient = Color3.new(1,1,1)
-        local cc = Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
-        if cc then cc.Brightness = 1; cc.Contrast = 0; cc.Saturation = 0 end
-        local atmo = Lighting:FindFirstChildOfClass("Atmosphere")
-        if atmo then atmo.Density = 0; atmo.Haze = 0; atmo.Glare = 0 end
-    end
-
-    if Config.Util.InfStamina and hum then
-        pcall(function() hum:SetAttribute("Stamina", 100) end)
-        for _, v in ipairs(char:GetDescendants()) do
-            if (v:IsA("IntValue") or v:IsA("NumberValue")) and v.Name:lower():find("stamina") then v.Value = 100 end
+        local ok, tuning = pcall(require, GunTuning)
+        if ok and type(tuning) == "table" then
+            if Config.Modules.NoRecoil then pcall(function() tuning.SetRecoil(0) end) end
+            if Config.Modules.NoSpread then pcall(function() tuning.SetSpread(0) end) end
         end
     end
+end
 
-    if Config.Util.NoGrass then
-        Workspace.Terrain.Decoration = false
-        local grass = Workspace:FindFirstChild("HushGrass")
-        if grass then for _, g in ipairs(grass:GetDescendants()) do if g:IsA("BasePart") then g.Transparency = 1 end end end
-    end
+--== MISC ==--
+table.insert(Runtime.connections, LP.Idled:Connect(function()
+    if Runtime.unloaded or not Config.Misc.AntiAFK then return end
+    pcall(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.zero) end)
 end))
 
-local ESP_Objects = {}
-local function createESP(name, color, offset)
-    local bg = Instance.new("BillboardGui", espFolder)
-    bg.Name = "ESP_" .. name
-    bg.AlwaysOnTop = true
-    bg.Size = UDim2.fromOffset(200, 50)
-    bg.StudsOffset = offset or Vector3.new(0, 3.5, 0)
-    
-    local tl = Instance.new("TextLabel", bg)
-    tl.Size = UDim2.fromScale(1, 1)
-    tl.BackgroundTransparency = 1
-    tl.TextColor3 = color
-    tl.TextStrokeTransparency = 0
-    tl.Font = Enum.Font.GothamBold
-    tl.TextScaled = true
-    tl.Text = name
-    return bg, tl
-end
-
-track(RunService.Heartbeat:Connect(function()
-    local camPos = Camera.CFrame.Position
-    
-    for plr, data in pairs(CachedPlayers) do
-        local dist = (camPos - data.Root.Position).Magnitude
-        if Config.ESP.Players and dist <= Config.ESP.MaxDist then
-            if not ESP_Objects[plr] then
-                local color = isTeammate(plr) and Color3.fromRGB(0,255,0) or Color3.fromRGB(255,60,60)
-                local bg, tl = createESP(plr.Name, color, Vector3.new(0, 3.5, 0))
-                bg.Adornee = data.Head
-                ESP_Objects[plr] = { bg = bg, tl = tl }
-            end
-            local obj = ESP_Objects[plr]
-            if obj and obj.tl then
-                obj.tl.Text = string.format("%s [%dm]\nHP: %d", plr.Name, math.floor(dist), math.floor(data.Hum.Health))
-            end
-        elseif ESP_Objects[plr] then
-            pcall(function() ESP_Objects[plr].bg:Destroy() end)
-            ESP_Objects[plr] = nil
-        end
+--== PUBLIC API ==--
+getgenv().HushCheat = {
+    Config = Config, Runtime = Runtime,
+    Unload = function()
+        Runtime.unloaded = true
+        for _, c in ipairs(Runtime.connections) do pcall(function() c:Disconnect() end) end
+        for obj, _ in pairs(Runtime.espHighlights) do clearESP(obj) end
+        if Runtime.fovCircle then pcall(function() Runtime.fovCircle:Remove() end) end
+        if getgenv().Cobble_UI_Loaded then getgenv().Cobble_UI_Loaded:Destroy() end
+        getgenv().HushCheat = nil
     end
-
-    for m, data in pairs(CachedWalkers) do
-        local dist = (camPos - data.Root.Position).Magnitude
-        if Config.ESP.Walkers and dist <= Config.ESP.MaxDist then
-            if not ESP_Objects[m] then
-                local bg, tl = createESP(data.Name, Color3.fromRGB(255, 0, 0), Vector3.new(0, 4, 0))
-                bg.Adornee = data.Root
-                ESP_Objects[m] = { bg = bg, tl = tl }
-            end
-            local obj = ESP_Objects[m]
-            if obj and obj.tl then obj.tl.Text = string.format("👾 %s [%dm]", data.Name, math.floor(dist)) end
-        elseif ESP_Objects[m] then
-            pcall(function() ESP_Objects[m].bg:Destroy() end)
-            ESP_Objects[m] = nil
-        end
-    end
-
-    for key, obj in pairs(ESP_Objects) do
-        if type(key) == "userdata" then
-            if not CachedPlayers[key] then pcall(function() obj.bg:Destroy() end); ESP_Objects[key] = nil end
-        else
-            if not CachedWalkers[key] then pcall(function() obj.bg:Destroy() end); ESP_Objects[key] = nil end
-        end
-    end
-end))
-
-getgenv().Cobble_Unload = function()
-    alive = false
-    for _, c in ipairs(connections) do pcall(function() c:Disconnect() end) end
-    pcall(function() RunService:UnbindFromRenderStep("cobble_visual") end)
-    if mt and setreadonly then
-        setreadonly(mt, false)
-        if oldIndex then mt.__index = oldIndex end
-        if oldNamecall then mt.__namecall = oldNamecall end
-        setreadonly(mt, true)
-    end
-    for _, obj in pairs(ESP_Objects) do pcall(function() obj.bg:Destroy() end) end
-    pcall(function() espFolder:Destroy() end)
-    if getgenv().Cobble_UI_Loaded then getgenv().Cobble_UI_Loaded:Destroy() end
-end-- cobble hills logic (HUSH V15 - TRUE NEXHUB ENGINE)
-pcall(function() if setthreadidentity then setthreadidentity(8) end end)
-if getgenv().Cobble_Unload then pcall(getgenv().Cobble_Unload) end
-
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
-local Lighting = game:GetService("Lighting")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local CoreGui = game:GetService("CoreGui")
-
-local LP = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
-local Mouse = LP:GetMouse()
-
--- CONFIG (Baseado no documento)
-local Config = getgenv().CobbleConfig or {}
-Config.Aimbot = Config.Aimbot or { Enabled=true, Silent=true, Key=Enum.UserInputType.MouseButton2, FOV=120, Smooth=0.35, Prediction=0.15, WallCheck=true, PartyCheck=true }
-Config.ESP = Config.ESP or { Enabled=true, Players=true, Walkers=true, MaxDist=1000 }
-Config.Util = Config.Util or { Fullbright=false, NoGrass=false, InfStamina=false, NoSpread=false, NoRecoil=false, AutoHeal=false }
-getgenv().CobbleConfig = Config
-
-local connections = {}
-local alive = true
-local function track(c) connections[#connections+1] = c; return c end
-
--- ANTI-DETECÇÃO (Wrapper Instance.new pro CoreGui)
-local OldInstance = Instance.new
-local function safeInstance(class, parent)
-    local obj = OldInstance(class)
-    if parent then obj.Parent = parent end
-    return obj
-end
-
--- ==========================================
--- UPVALUE PATCHING (O SEGREDO DO NO RECOIL/SPREAD)
--- ==========================================
-local OriginalUpvalues = {}
-task.spawn(function()
-    local getupvalues = debug.getupvalues or getupvalue
-    local setupvalue = debug.setupvalue or setupvalue
-    
-    -- Tenta achar o módulo ClientBreath ou Weapon Module
-    local Modules = ReplicatedStorage:FindFirstChild("Modules") 
-    if Modules then
-        local WeaponConfig = Modules:FindFirstChild("WeaponConfig") or Modules:FindFirstChild("Config")
-        if WeaponConfig then
-            local ok, mod = pcall(require, WeaponConfig)
-            if ok and type(mod) == "table" then
-                -- Salva originais
-                OriginalUpvalues.Recoil = mod.Recoil or 1
-                OriginalUpvalues.Spread = mod.Spread or 1
-                
-                track(RunService.Heartbeat:Connect(function()
-                    if Config.Util.NoRecoil then pcall(function() mod.Recoil = 0 end) end
-                    if Config.Util.NoSpread then pcall(function() mod.Spread = 0 end) end
-                end))
-            end
-        end
-    end
-end)
-
--- ==========================================
--- CACHES
--- ==========================================
-local CachedPlayers, CachedWalkers = {}, {}
-local espFolder = safeInstance("Folder", gethui and gethui() or CoreGui)
-espFolder.Name = "CobbleESP_Guis"
-
-local function isTeammate(plr)
-    if not plr then return false end
-    local myP, theirP = LP:GetAttribute("Party"), plr:GetAttribute("Party")
-    if myP and theirP and myP == theirP then return true end
-    return LP.Team and plr.Team == LP.Team
-end
-
-local function getTargetPart(targetChar)
-    -- A Cadeia de FindFirstChild exata do NexHub
-    return targetChar:FindFirstChild("Head") 
-        or targetChar:FindFirstChild("UpperTorso") 
-        or targetChar:FindFirstChild("Torso")
-        or targetChar:FindFirstChild("HumanoidRootPart")
-end
-
-local function getTargetPos(t)
-    if not t or not t.Root then return nil end
-    local pos = (t.Head and t.Head.Position) or t.Root.Position
-    if Config.Aimbot.Prediction > 0 then
-        local v = t.Root.AssemblyLinearVelocity
-        if v.Magnitude > 0.5 then 
-            local ping = LP:GetNetworkPing() / 2
-            pos = pos + (v * Config.Aimbot.Prediction) + (v * ping)
-        end
-    end
-    return pos
-end
-
-task.spawn(function()
-    while alive do
-        local pTemp, wTemp = {}, {}
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= LP and plr.Character then
-                local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-                local root = plr.Character:FindFirstChild("HumanoidRootPart")
-                local part = getTargetPart(plr.Character)
-                if hum and root and part and hum.Health > 0 then
-                    pTemp[plr] = { Char=plr.Character, Hum=hum, Root=root, Head=part, Plr=plr }
-                end
-            end
-        end
-        CachedPlayers = pTemp
-
-        local monsters = Workspace:FindFirstChild("Monsters")
-        if monsters then
-            for _, m in ipairs(monsters:GetChildren()) do
-                local hum, root = m:FindFirstChildOfClass("Humanoid"), m:FindFirstChild("HumanoidRootPart")
-                if hum and root and hum.Health > 0 then wTemp[m] = { Hum=hum, Root=root, Name=m.Name } end
-            end
-        end
-        CachedWalkers = wTemp
-        task.wait(0.5)
-    end
-end)
-
--- ==========================================
--- AIMBOT (HOOK NO MOUSE.HIT/TARGET)
--- ==========================================
-local aimHeld = false
-track(UserInputService.InputBegan:Connect(function(i, gpe) 
-    if not gpe and (i.UserInputType == Config.Aimbot.Key) then aimHeld = true end 
-end))
-track(UserInputService.InputEnded:Connect(function(i) 
-    if i.UserInputType == Config.Aimbot.Key then aimHeld = false end 
-end))
-
-local function isVisible(targetChar)
-    if not Config.Aimbot.WallCheck then return true end
-    local part = getTargetPart(targetChar)
-    if not part then return false end
-    local rp = RaycastParams.new()
-    rp.FilterDescendantsInstances = { LP.Character, targetChar }
-    rp.FilterType = Enum.RaycastFilterType.Exclude
-    return Workspace:Raycast(Camera.CFrame.Position, (part.Position - Camera.CFrame.Position), rp) == nil
-end
-
-local function pickTarget()
-    local center = Camera.ViewportSize * 0.5
-    local best, bestD = nil, Config.Aimbot.FOV
-    for _, d in pairs(CachedPlayers) do
-        if not (Config.Aimbot.PartyCheck and isTeammate(d.Plr)) and isVisible(d.Char) then
-            local targetPos = getTargetPos(d)
-            if targetPos then
-                local sp, on = Camera:WorldToViewportPoint(targetPos)
-                if sp.Z > 0 and on and (Vector2.new(sp.X, sp.Y) - center).Magnitude < bestD then
-                    bestD = (Vector2.new(sp.X, sp.Y) - center).Magnitude
-                    best = d
-                end
-            end
-        end
-    end
-    return best
-end
-
--- METATABLE HOOK (Silent Aim via Mouse)
-local oldIndex, oldNamecall
-local mt = getrawmetatable(game)
-local wrap = newcclosure or function(f) return f end
-setreadonly(mt, false)
-oldIndex = mt.__index
-oldNamecall = mt.__namecall
-
-mt.__index = wrap(function(self, key)
-    if aimHeld and Config.Aimbot.Enabled and Config.Aimbot.Silent and self == Mouse then
-        local target = pickTarget()
-        if target then
-            local targetPos = getTargetPos(target)
-            if key == "Hit" then return CFrame.new(targetPos) end
-            if key == "Target" then return target.Head end
-        end
-    end
-    return oldIndex(self, key)
-end)
-
--- HOOK NO NAMECALL (Triggerbot)
-mt.__namecall = wrap(function(self, ...)
-    local method = getnamecallmethod()
-    local args = {...}
-    
-    -- Triggerbot do NexHub
-    if method == "Raycast" and aimHeld and Config.Aimbot.Enabled then
-        local target = pickTarget()
-        if target then
-            local targetPos = getTargetPos(target)
-            local unitDir = (targetPos - Camera.CFrame.Position).Unit
-            if Camera.CFrame.LookVector:Dot(unitDir) >= 0.9994 then
-                if mouse1click then pcall(mouse1click) end
-            end
-        end
-    end
-    
-    return oldNamecall(self, ...)
-end)
-setreadonly(mt, true)
-
--- ==========================================
--- UTILS
--- ==========================================
-track(RunService.Heartbeat:Connect(function()
-    local char = LP.Character
-    if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    
-    if Config.Util.Fullbright then
-        Lighting.Brightness = 3; Lighting.ClockTime = 14; Lighting.FogEnd = 1e5
-        Lighting.Ambient = Color3.new(1,1,1); Lighting.OutdoorAmbient = Color3.new(1,1,1)
-        local cc = Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
-        if cc then cc.Brightness = 1; cc.Contrast = 0; cc.Saturation = 0 end
-        local atmo = Lighting:FindFirstChildOfClass("Atmosphere")
-        if atmo then atmo.Density = 0; atmo.Haze = 0; atmo.Glare = 0 end
-    end
-
-    if Config.Util.InfStamina and hum then
-        pcall(function() hum:SetAttribute("Stamina", 100) end)
-    end
-
-    if Config.Util.NoGrass then
-        Workspace.Terrain.Decoration = false
-        local grass = Workspace:FindFirstChild("HushGrass")
-        if grass then for _, g in ipairs(grass:GetDescendants()) do if g:IsA("BasePart") then g.Transparency = 1 end end end
-    end
-end))
-
--- ==========================================
--- ESP (HIGHLIGHT + BILLBOARD GUI)
--- ==========================================
-local ESP_Objects = {}
-
-track(RunService.Heartbeat:Connect(function()
-    local camPos = Camera.CFrame.Position
-    
-    for plr, data in pairs(CachedPlayers) do
-        local dist = (camPos - data.Root.Position).Magnitude
-        if Config.ESP.Players and dist <= Config.ESP.MaxDist then
-            if not ESP_Objects[plr] then
-                local color = isTeammate(plr) and Color3.fromRGB(0,255,0) or Color3.fromRGB(255,60,60)
-                
-                -- Highlight (O segredo visual do NexHub)
-                local hl = safeInstance("Highlight", plr.Character)
-                hl.FillColor = color
-                hl.OutlineColor = Color3.new(1,1,1)
-                hl.FillTransparency = 0.5
-                
-                -- Billboard
-                local bg = safeInstance("BillboardGui", espFolder)
-                bg.AlwaysOnTop = true
-                bg.Size = UDim2.fromOffset(200, 50)
-                bg.StudsOffset = Vector3.new(0, 3.5, 0)
-                bg.Adornee = data.Head
-                
-                local tl = safeInstance("TextLabel", bg)
-                tl.Size = UDim2.fromScale(1, 1)
-                tl.BackgroundTransparency = 1
-                tl.TextColor3 = color
-                tl.TextStrokeTransparency = 0
-                tl.Font = Enum.Font.GothamBold
-                tl.TextScaled = true
-                
-                ESP_Objects[plr] = { hl = hl, bg = bg, tl = tl }
-            end
-            
-            local obj = ESP_Objects[plr]
-            obj.tl.Text = string.format("%s [%dm]\nHP: %d", plr.Name, math.floor(dist), math.floor(data.Hum.Health))
-        elseif ESP_Objects[plr] then
-            pcall(function() ESP_Objects[plr].hl:Destroy() end)
-            pcall(function() ESP_Objects[plr].bg:Destroy() end)
-            ESP_Objects[plr] = nil
-        end
-    end
-
-    for m, data in pairs(CachedWalkers) do
-        local dist = (camPos - data.Root.Position).Magnitude
-        if Config.ESP.Walkers and dist <= Config.ESP.MaxDist then
-            if not ESP_Objects[m] then
-                local hl = safeInstance("Highlight", m)
-                hl.FillColor = Color3.fromRGB(255, 0, 0)
-                hl.FillTransparency = 0.5
-                
-                local bg = safeInstance("BillboardGui", espFolder)
-                bg.AlwaysOnTop = true
-                bg.Size = UDim2.fromOffset(200, 50)
-                bg.StudsOffset = Vector3.new(0, 4, 0)
-                bg.Adornee = data.Root
-                
-                local tl = safeInstance("TextLabel", bg)
-                tl.Size = UDim2.fromScale(1, 1)
-                tl.BackgroundTransparency = 1
-                tl.TextColor3 = Color3.fromRGB(255, 0, 0)
-                tl.Font = Enum.Font.GothamBold
-                tl.TextScaled = true
-                
-                ESP_Objects[m] = { hl = hl, bg = bg, tl = tl }
-            end
-            ESP_Objects[m].tl.Text = string.Format("👾 %s [%dm]", data.Name, math.floor(dist))
-        elseif ESP_Objects[m] then
-            pcall(function() ESP_Objects[m].hl:Destroy() end)
-            pcall(function() ESP_Objects[m].bg:Destroy() end)
-            ESP_Objects[m] = nil
-        end
-    end
-end))
-
--- ==========================================
--- UNLOAD
--- ==========================================
-getgenv().Cobble_Unload = function()
-    alive = false
-    for _, c in ipairs(connections) do pcall(function() c:Disconnect() end) end
-    
-    if mt and setreadonly then
-        setreadonly(mt, false)
-        if oldIndex then mt.__index = oldIndex end
-        if oldNamecall then mt.__namecall = oldNamecall end
-        setreadonly(mt, true)
-    end
-    
-    -- Restaura Upvalues
-    if OriginalUpvalues.Recoil then pcall(function() OriginalUpvalues.Recoil = OriginalUpvalues.Recoil end) end
-    
-    for _, obj in pairs(ESP_Objects) do
-        pcall(function() obj.hl:Destroy() end)
-        pcall(function() obj.bg:Destroy() end)
-    end
-    pcall(function() espFolder:Destroy() end)
-    if getgenv().Cobble_UI_Loaded then getgenv().Cobble_UI_Loaded:Destroy() end
-    print("[cobble] V15 Unloaded.")
-end
+}
